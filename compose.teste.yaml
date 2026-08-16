@@ -19,6 +19,15 @@ services:
   sandbox:
     image: postgres:17-alpine
     container_name: backuprestore-sandbox
+    user: postgres
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,mode=1777,size=64m
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,mode=1777,size=16m
     environment:
       # Credenciais descartáveis: este banco nunca guarda nada que importe.
       POSTGRES_DB: sandbox
@@ -43,6 +52,7 @@ services:
     # limite fica muito acima do uso observado (~25 MiB), sem deixar um dump
     # defeituoso consumir toda a memoria do Docker Desktop.
     mem_limit: 768m
+    cpus: "2.0"
     logging:
       driver: json-file
       options:
