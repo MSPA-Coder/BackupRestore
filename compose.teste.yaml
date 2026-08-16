@@ -52,6 +52,7 @@ services:
     # limite fica muito acima do uso observado (~25 MiB), sem deixar um dump
     # defeituoso consumir toda a memoria do Docker Desktop.
     mem_limit: 768m
+    cpus: "2.0"
     logging:
       driver: json-file
       options:

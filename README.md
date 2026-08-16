@@ -138,6 +138,10 @@ raiz somente leitura; apenas o volume descartável de dados e os diretórios
 transitórios em `tmpfs` permanecem graváveis. Isso não altera o procedimento de
 descarte nem os artefatos de backup.
 
+O sandbox também fica limitado a 2 vCPU — folga suficiente para o maior ensaio
+de restauração local, sem permitir que um dump defeituoso ocupe todos os 20
+vCPU disponíveis no host.
+
 ```bash
 docker compose -f compose.teste.yaml up -d
 docker compose -f compose.teste.yaml down -v    # descarta
