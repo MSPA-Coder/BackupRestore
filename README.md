@@ -122,6 +122,17 @@ python cli.py ensaio --projeto <slug>
 
 ---
 
+## CI
+
+O workflow em GitHub Actions roda em push e pull request para `main`, por
+disparo manual e semanalmente. Ele testa a versão mínima Python 3.13 e a versão
+Python mais recente disponível, instala `requirements.txt`, executa os testes
+unitários e compila as fontes. Não roda `verificar` ou `ensaio`, pois esses
+comandos dependem dos artefatos e do sandbox locais. O Dependabot acompanha
+pip e GitHub Actions semanalmente, agrupando atualizações minor/patch.
+
+---
+
 ## Agendamento
 
 O backup só vale se rodar sozinho. Registre a tarefa uma vez (PowerShell como
