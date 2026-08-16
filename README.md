@@ -50,11 +50,41 @@ arquivos confidenciais que precisam de protecao independente esta em
 
 ## Destino dos backups
 
-O destino é escolhido na tela **Configurações** antes do primeiro backup. A
-escolha fica em `configuracao.local.json`, que não entra no Git. Para evitar que
-o catálogo passe a apontar para arquivos inexistentes, o aplicativo bloqueia a
-troca depois que já há artefatos catalogados; nesse caso, a migração deve mover
-os arquivos e o catálogo de forma consciente.
+O destino é definido antes do primeiro backup por quem opera o host, nunca pela
+interface HTTP. Execute localmente:
+
+```powershell
+python cli.py configurar-raiz 'C:\caminho\dos\backups'
+```
+
+O comando grava a raiz e, por padrão, torna essa própria pasta o único limite
+permitido. Se o operador precisar manter vários destinos sob uma pasta pai,
+define o limite explicitamente:
+
+```powershell
+python cli.py configurar-raiz 'C:\backups\BackupRestore' --permitida 'C:\backups'
+```
+
+`BACKUPRESTORE_RAIZ_PERMITIDA`, definido no ambiente do processo que executa a
+aplicação ou tarefa agendada, prevalece sobre o arquivo local e pode restringir
+ainda mais esse limite. A tela **Configurações** só exibe o destino e o limite
+efetivos. A raiz e o limite ficam em `configuracao.local.json`, que não entra no
+Git. Instalações anteriores continuam válidas: a raiz já gravada passa a ser seu
+limite até o operador executar o comando acima.
+
+Para evitar que o catálogo passe a apontar para arquivos inexistentes, a troca
+de destino é bloqueada depois que há artefatos catalogados; nesse caso, migre os
+arquivos e o catálogo de forma consciente. Referências do catálogo que tentem
+sair da raiz são recusadas e marcadas como corrompidas, nunca abertas ou
+removidas.
+
+### Rollback da configuração
+
+O formato do catálogo e dos artefatos não mudou. Para reverter somente o código,
+pare a interface, mantenha `configuracao.local.json` e use a versão anterior;
+ela ignora o campo adicional de limite permitido. Não mova nem apague artefatos
+como parte do rollback. Antes de retomar a rotina, rode `python cli.py verificar`
+e um `python cli.py ensaio --projeto <slug>` no sandbox.
 
 ## O que é gravado
 

@@ -17,8 +17,9 @@ backup e você tem Git e Docker, isto basta.
     pre_restauracao\  <projeto>_seguranca_<data>.dump  (dumps automáticos pré-restauração)
 ```
 
-A raiz é a escolhida em Configurações (`configuracao.local.json`, fora do
-Git) — confira lá qual é a atual antes de procurar os arquivos.
+A raiz é definida pelo operador com `python cli.py configurar-raiz` e fica em
+`configuracao.local.json` (fora do Git) — confira ali qual é a atual antes de
+procurar os arquivos. A interface web apenas a exibe; não pode alterá-la.
 
 Cada artefato tem um `.manifest.json` ao lado com SHA-256, tamanho e origem.
 Os `<projeto>` são `conforto_termico`, `mega_sena`, `controle_bancario` e

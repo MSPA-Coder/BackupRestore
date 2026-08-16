@@ -23,7 +23,7 @@ import time
 
 import banco
 import motor
-from configuracao import raiz_backup
+from configuracao import caminho_sob_raiz
 from projetos import CONTAINERS_PROTEGIDOS, Projeto, por_slug
 
 
@@ -84,12 +84,14 @@ def _dump_de_seguranca(
     if not banco_existe(container, usuario, base):
         return None
 
-    pasta = os.path.join(raiz_backup(), "projects", slug_projeto, "pre_restauracao")
+    pasta = caminho_sob_raiz("projects", slug_projeto, "pre_restauracao")
     os.makedirs(pasta, exist_ok=True)
+    pasta = caminho_sob_raiz("projects", slug_projeto, "pre_restauracao")
     carimbo = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     nome = f"{slug_projeto}_seguranca_{carimbo}.dump"
-    tmp = os.path.join(motor._pasta_temp(), nome + ".tmp")
-    final = os.path.join(pasta, nome)
+    motor._pasta_temp()
+    tmp = caminho_sob_raiz("temp", nome + ".tmp")
+    final = caminho_sob_raiz("projects", slug_projeto, "pre_restauracao", nome)
 
     inicio = time.monotonic()
     processo = motor._rodar(
@@ -159,7 +161,11 @@ def restaurar(
     if artefato["tipo"] != "banco":
         raise RestauracaoRecusada(f"artefato {artefato_id} é do tipo {artefato['tipo']}")
 
-    origem = os.path.join(raiz_backup(), artefato["caminho_relativo"].replace("/", os.sep))
+    try:
+        origem = motor.caminho_artefato(artefato["caminho_relativo"])
+    except motor.FalhaDeBackup as erro:
+        banco.marcar_situacao_artefato(artefato_id, "corrompido")
+        raise RestauracaoRecusada("artefato tem caminho inseguro no catálogo") from erro
     if not os.path.exists(origem):
         banco.marcar_situacao_artefato(artefato_id, "ausente")
         raise RestauracaoRecusada(f"arquivo não encontrado: {origem}")

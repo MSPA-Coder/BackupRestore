@@ -43,7 +43,12 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 
 import banco
-from configuracao import raiz_backup
+from configuracao import (
+    ConfiguracaoInvalida,
+    caminho_catalogo,
+    caminho_sob_raiz,
+    raiz_backup,
+)
 from projetos import Projeto, por_slug
 
 TEMPO_LIMITE_PADRAO = 3600  # dumps grandes; o maior hoje leva ~1 min
@@ -134,19 +139,27 @@ def _carimbo() -> str:
 
 def _pasta_temp() -> str:
     # No mesmo volume do destino final: é o que torna o rename atômico.
-    caminho = os.path.join(raiz_backup(), "temp")
+    caminho = caminho_sob_raiz("temp")
     os.makedirs(caminho, exist_ok=True)
-    return caminho
+    return caminho_sob_raiz("temp")
 
 
 def _pasta_destino(projeto: Projeto, tipo: str) -> str:
-    caminho = os.path.join(raiz_backup(), "projects", projeto.slug, tipo)
+    caminho = caminho_sob_raiz("projects", projeto.slug, tipo)
     os.makedirs(caminho, exist_ok=True)
-    return caminho
+    return caminho_sob_raiz("projects", projeto.slug, tipo)
 
 
 def _relativo(caminho_absoluto: str) -> str:
     return os.path.relpath(caminho_absoluto, raiz_backup()).replace("\\", "/")
+
+
+def caminho_artefato(caminho_relativo: str) -> str:
+    """Resolve uma referência do catálogo sem permitir sair da raiz de backup."""
+    try:
+        return caminho_catalogo(caminho_relativo)
+    except ConfiguracaoInvalida as erro:
+        raise FalhaDeBackup(f"caminho inseguro no catálogo: {erro}") from erro
 
 
 # --------------------------------------------------------------------------
@@ -282,7 +295,11 @@ def aplicar_retencao(projeto: Projeto, tipo: str) -> int:
 
     removidos = 0
     for linha in excedentes:
-        caminho = os.path.join(raiz_backup(), linha["caminho_relativo"].replace("/", os.sep))
+        try:
+            caminho = caminho_artefato(linha["caminho_relativo"])
+        except FalhaDeBackup:
+            banco.marcar_situacao_artefato(linha["id"], "corrompido")
+            continue
         for alvo in (caminho, caminho + ".manifest.json"):
             if os.path.exists(alvo):
                 os.remove(alvo)
@@ -308,8 +325,10 @@ def _produzir(projeto: Projeto, tipo: str, execucao_id: int | None) -> Resultado
     carimbo = _carimbo()
     extensao = {"banco": "dump", "codigo": "zip"}[tipo]
     nome = f"{projeto.slug}_{tipo}_{carimbo}.{extensao}"
-    tmp = os.path.join(_pasta_temp(), nome + ".tmp")
-    final = os.path.join(_pasta_destino(projeto, tipo), nome)
+    _pasta_temp()
+    _pasta_destino(projeto, tipo)
+    tmp = caminho_sob_raiz("temp", nome + ".tmp")
+    final = caminho_sob_raiz("projects", projeto.slug, tipo, nome)
 
     extra: dict = {}
     try:
@@ -435,7 +454,12 @@ def verificar(projeto_slug: str | None = None) -> dict[str, int]:
     for linha in banco.listar_artefatos(projeto_slug, limite=10000):
         if linha["situacao"] not in ("valido", "corrompido", "ausente"):
             continue
-        caminho = os.path.join(raiz_backup(), linha["caminho_relativo"].replace("/", os.sep))
+        try:
+            caminho = caminho_artefato(linha["caminho_relativo"])
+        except FalhaDeBackup:
+            banco.marcar_situacao_artefato(linha["id"], "corrompido")
+            contagem["corrompidos"] += 1
+            continue
         if not os.path.exists(caminho):
             banco.marcar_situacao_artefato(linha["id"], "ausente")
             contagem["ausentes"] += 1

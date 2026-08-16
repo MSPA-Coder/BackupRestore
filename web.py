@@ -23,7 +23,7 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, url
 import banco
 import motor
 import restaurar as restauracao
-from configuracao import ConfiguracaoInvalida, raiz_backup, salvar_raiz_backup
+from configuracao import raiz_backup, raiz_permitida
 from projetos import CONTAINER_SANDBOX, PROJETOS, RAIZ_PROJETOS, por_slug
 
 USUARIO_SANDBOX = "sandbox"
@@ -174,29 +174,10 @@ def configuracoes():
     return render_template(
         "configuracoes.html",
         raiz_backup=raiz_backup(),
+        raiz_permitida=raiz_permitida(),
         raiz_projetos=RAIZ_PROJETOS,
         espaco_livre=motor.espaco_livre(),
     )
-
-
-@app.post("/configuracoes")
-def salvar_configuracoes():
-    nova_raiz = request.form.get("raiz_backup", "")
-    if os.path.normcase(os.path.normpath(nova_raiz)) != os.path.normcase(raiz_backup()):
-        if banco.listar_artefatos(limite=1):
-            return render_template(
-                "configuracoes.html", raiz_backup=raiz_backup(), raiz_projetos=RAIZ_PROJETOS,
-                espaco_livre=motor.espaco_livre(),
-                erro="O destino não pode mudar enquanto existem artefatos catalogados. Migre os arquivos e o catálogo antes de alterá-lo.",
-            ), 409
-        try:
-            salvar_raiz_backup(nova_raiz)
-        except ConfiguracaoInvalida as erro:
-            return render_template(
-                "configuracoes.html", raiz_backup=raiz_backup(), raiz_projetos=RAIZ_PROJETOS,
-                espaco_livre=motor.espaco_livre(), erro=str(erro),
-            ), 400
-    return redirect(url_for("configuracoes"))
 
 
 @app.get("/historico")

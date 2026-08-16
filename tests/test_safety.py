@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import importlib
 import json
 import os
+import sys
 import tempfile
 import unittest
 import zipfile
+from pathlib import Path
 from unittest.mock import patch
 
+import configuracao
+import cli
 import motor
 import restaurar
 from projetos import CONTAINERS_PROTEGIDOS, PROJETOS, por_slug
@@ -80,6 +85,109 @@ class RestoreGuardTests(unittest.TestCase):
         self.assertFalse(result["confere"])
         self.assertTrue(result["restauracao_valida"])
         self.assertEqual(result["divergencias"]["eventos"], (110, 100))
+
+    def test_catalog_traversal_is_refused_before_restore(self) -> None:
+        artefato = {"tipo": "banco", "caminho_relativo": "../fora.dump", "projeto": "mega_sena"}
+        with (
+            patch.object(restaurar.banco, "obter_artefato", return_value=artefato),
+            patch.object(motor, "caminho_artefato", side_effect=motor.FalhaDeBackup("inseguro")),
+            patch.object(restaurar.banco, "marcar_situacao_artefato") as marcar,
+        ):
+            with self.assertRaises(restaurar.RestauracaoRecusada):
+                restaurar.restaurar(
+                    7,
+                    container_destino="backuprestore-sandbox",
+                    banco_destino="destino",
+                    usuario_destino="sandbox",
+                    confirmacao="destino",
+                )
+        marcar.assert_called_once_with(7, "corrompido")
+
+
+class BackupRootGuardTests(unittest.TestCase):
+    def test_external_root_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            permitida = Path(directory, "permitida")
+            externa = Path(directory, "externa")
+            with patch.dict(
+                os.environ,
+                {configuracao.VARIAVEL_RAIZ_PERMITIDA: str(permitida)},
+                clear=False,
+            ):
+                with self.assertRaises(configuracao.ConfiguracaoInvalida):
+                    configuracao.validar_raiz(str(externa))
+
+    def test_catalog_traversal_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            raiz = Path(directory, "backups")
+            raiz.mkdir()
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        configuracao.VARIAVEL_RAIZ_PERMITIDA: str(raiz),
+                        "BACKUPRESTORE_RAIZ_BACKUP": str(raiz),
+                    },
+                    clear=False,
+                ),
+                self.assertRaises(motor.FalhaDeBackup),
+            ):
+                motor.caminho_artefato("../fora.dump")
+
+    def test_symlink_leaving_permitted_root_is_refused_when_supported(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            permitida = Path(directory, "permitida")
+            externa = Path(directory, "externa")
+            permitida.mkdir()
+            externa.mkdir()
+            link = permitida / "link-externo"
+            try:
+                os.symlink(externa, link, target_is_directory=True)
+            except (NotImplementedError, OSError) as erro:
+                self.skipTest(f"links simbólicos indisponíveis neste ambiente: {erro}")
+            with patch.dict(
+                os.environ,
+                {configuracao.VARIAVEL_RAIZ_PERMITIDA: str(permitida)},
+                clear=False,
+            ):
+                with self.assertRaises(configuracao.ConfiguracaoInvalida):
+                    configuracao.validar_raiz(str(link))
+
+    def test_web_does_not_expose_root_change_post(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            raiz = Path(directory, "backups")
+            with (
+                patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(Path(directory, "config.json"))),
+                patch.dict(
+                    os.environ,
+                    {
+                        configuracao.VARIAVEL_RAIZ_PERMITIDA: str(raiz),
+                        "BACKUPRESTORE_RAIZ_BACKUP": str(raiz),
+                    },
+                    clear=False,
+                ),
+            ):
+                sys.modules.pop("web", None)
+                web = importlib.import_module("web")
+                regras = [
+                    regra
+                    for regra in web.app.url_map.iter_rules()
+                    if regra.rule == "/configuracoes"
+                ]
+                self.assertEqual(len(regras), 1)
+                self.assertNotIn("POST", regras[0].methods)
+            sys.modules.pop("web", None)
+
+    def test_permitida_can_change_without_changing_catalog_root(self) -> None:
+        raiz = os.path.abspath("C:/backups/BackupRestore")
+        argumentos = type("Args", (), {"caminho": raiz, "permitida": "C:/backups"})()
+        with (
+            patch.object(cli.banco, "listar_artefatos", return_value=[object()]),
+            patch.object(cli, "raiz_backup", return_value=raiz),
+            patch.object(cli, "configurar_raiz_backup", return_value=raiz) as configurar,
+        ):
+            self.assertEqual(cli.comando_configurar_raiz(argumentos), 0)
+        configurar.assert_called_once_with(raiz, permitida="C:/backups")
 
 
 class ArtifactValidationTests(unittest.TestCase):
