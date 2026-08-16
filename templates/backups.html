@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% set secao = 'backups' %}
+{% block titulo %}Backups — BackupRestore{% endblock %}
+{% block trilha %}Backups{% endblock %}
+
+{% block conteudo %}
+<div class="page-heading">
+  <div><p class="eyebrow">WORKSPACE / ARTEFATOS</p><h1>Backups</h1><p class="muted">Catálogo central de artefatos produzidos e validados pelo aplicativo.</p></div>
+</div>
+<form class="catalog-filters" method="get">
+  <label>Projeto<select name="projeto"><option value="">Todos os projetos</option>{% for p in projetos %}<option value="{{ p.slug }}" {% if projeto_atual == p.slug %}selected{% endif %}>{{ p.nome }}</option>{% endfor %}</select></label>
+  <label>Tipo<select name="tipo"><option value="">Todos os tipos</option>{% for tipo, rotulo in rotulos.items() %}<option value="{{ tipo }}" {% if tipo_atual == tipo %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}</select></label>
+  <button class="secondary" type="submit">Aplicar filtros</button>
+</form>
+<section class="panel">
+  <div class="artifact-header"><span>Artefato</span><span>Projeto</span><span>Tipo</span><span>Tamanho</span><span>Integridade</span><span>Criado em</span><span></span></div>
+  {% for a in artefatos %}
+    <div class="artifact-row"><div class="backup-file">{{ a.caminho_relativo.split('/')[-1] }}</div><span>{{ a.projeto }}</span><span>{{ rotulos[a.tipo] }}</span><span>{{ a.bytes | tamanho }}</span><span>{% if a.situacao == 'valido' %}<span class="tag">Íntegro</span>{% elif a.situacao == 'corrompido' %}<span class="tag fail">Corrompido</span>{% else %}<span class="tag warn">{{ a.situacao | capitalize }}</span>{% endif %}</span><span>{{ a.criado_em | momento }}</span><a class="open-link" href="{{ url_for('projeto', slug=a.projeto, tipo=a.tipo) }}">Ver →</a></div>
+  {% else %}<div class="linha-vazia">Nenhum artefato atende aos filtros selecionados.</div>{% endfor %}
+</section>
+{% endblock %}

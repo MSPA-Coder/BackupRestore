@@ -1,0 +1,5 @@
+configuracao.local.json
+catalogo.sqlite3
+catalogo.sqlite3-shm
+catalogo.sqlite3-wal
+__pycache__/

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% set secao = 'restaurar' %}
+{% block titulo %}Restaurar — BackupRestore{% endblock %}
+{% block trilha %}Restaurar{% endblock %}
+
+{% block conteudo %}
+<div class="page-heading"><div><p class="eyebrow">OPERAÇÃO CONTROLADA</p><h1>Restaurar banco</h1><p class="muted">Selecione um dump íntegro. A próxima etapa mostra o impacto e exige confirmação forte.</p></div></div>
+<div class="restore-steps"><article><span>01</span><div><strong>Selecione o dump</strong><p>Somente artefatos de banco aprovados aparecem aqui.</p></div></article><article><span>02</span><div><strong>Confirme o impacto</strong><p>A restauração cria uma salvaguarda antes da alteração do destino.</p></div></article></div>
+<section class="panel">
+  {% for a in artefatos %}
+    <div class="backup-row"><div><div class="backup-file">{{ a.caminho_relativo.split('/')[-1] }}</div><div class="backup-date">{{ a.criado_em | momento }} · SHA {{ a.sha256[:12] }}…</div></div><div><span class="cell-label">Projeto</span><span class="cell-value">{{ a.projeto }}</span></div><div><span class="cell-label">Tamanho</span><span class="cell-value">{{ a.bytes | tamanho }}</span></div><div><span class="tag">Íntegro</span></div><a class="primary" href="{{ url_for('tela_restaurar', artefato_id=a.id) }}">Preparar restauração</a></div>
+  {% else %}<div class="linha-vazia">Nenhum dump íntegro disponível. Crie e valide um backup de banco primeiro.</div>{% endfor %}
+</section>
+{% endblock %}

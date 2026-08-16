@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set secao = 'projetos' %}
+{% block titulo %}Projetos — BackupRestore{% endblock %}
+{% block trilha %}Projetos{% endblock %}
+
+{% block conteudo %}
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">WORKSPACE / PROJETOS</p>
+    <h1>Projetos</h1>
+    <p class="muted">Gerencie as proteções independentes de banco e código.</p>
+  </div>
+</div>
+
+<section class="project-cards">
+  {% for p in projetos %}
+    {% set r = resumos[p.slug] %}
+    <article class="project-card">
+      <div class="card-topline"><span class="project-initials">{{ p.nome[:2] | upper }}</span><span class="tag">Ativo</span></div>
+      <h2>{{ p.nome }}</h2>
+      <p class="project-slug">{{ p.slug }}</p>
+      <p class="project-path" title="{{ p.caminho }}">{{ p.caminho }}</p>
+      <dl class="project-facts">
+        <div><dt>Banco</dt><dd>{% if r.banco %}Último {{ r.banco.criado_em | momento }}{% else %}Sem backup{% endif %}</dd></div>
+        <div><dt>Código</dt><dd>{% if r.codigo %}Último {{ r.codigo.criado_em | momento }}{% else %}Sem backup{% endif %}</dd></div>
+        <div><dt>Retenção</dt><dd>{{ p.retencao }} por tipo</dd></div>
+      </dl>
+      <div class="card-actions">
+        <a class="secondary" href="{{ url_for('projeto', slug=p.slug) }}">Abrir projeto</a>
+        <form method="post" action="{{ url_for('disparar_backup', slug=p.slug) }}"><button class="primary" type="submit">Novo backup</button></form>
+      </div>
+    </article>
+  {% endfor %}
+</section>
+{% endblock %}

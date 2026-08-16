@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% set secao = 'integridade' %}
+{% block titulo %}Integridade — BackupRestore{% endblock %}
+{% block trilha %}Integridade{% endblock %}
+
+{% block conteudo %}
+<div class="page-heading"><div><p class="eyebrow">CONTROLE DE QUALIDADE</p><h1>Integridade</h1><p class="muted">Estado registrado na última validação de cada artefato publicado.</p></div></div>
+<div class="metric-grid compact-metrics"><article class="metric"><span>Artefatos íntegros</span><strong>{{ inteiros }}</strong><small>hash e formato validados</small></article><article class="metric {% if problemas %}warning{% endif %}"><span>Requer atenção</span><strong>{{ problemas }}</strong><small>ausentes ou corrompidos</small></article><article class="metric"><span>Última verificação</span><strong>Catálogo</strong><small>consulte o histórico para detalhes</small></article></div>
+<section class="panel"><div class="artifact-header"><span>Artefato</span><span>Projeto</span><span>Tipo</span><span>Hash SHA-256</span><span>Validado em</span><span>Estado</span><span></span></div>{% for a in artefatos %}<div class="artifact-row"><div class="backup-file">{{ a.caminho_relativo.split('/')[-1] }}</div><span>{{ a.projeto }}</span><span>{{ a.tipo | capitalize }}</span><span class="sha">{{ a.sha256[:16] if a.sha256 else '—' }}…</span><span>{{ a.validado_em | momento }}</span><span>{% if a.situacao == 'valido' %}<span class="tag">Íntegro</span>{% else %}<span class="tag fail">{{ a.situacao | capitalize }}</span>{% endif %}</span><a class="open-link" href="{{ url_for('projeto', slug=a.projeto, tipo=a.tipo) }}">Ver →</a></div>{% else %}<div class="linha-vazia">Ainda não há artefatos para acompanhar.</div>{% endfor %}</section>
+{% endblock %}

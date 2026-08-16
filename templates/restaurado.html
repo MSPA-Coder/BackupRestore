@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% set secao = 'projetos' %}
+{% block titulo %}Restaurado — {{ projeto.nome }}{% endblock %}
+{% block trilha %}Restauração concluída{% endblock %}
+
+{% block conteudo %}
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">CONCLUÍDO</p>
+    <h1>Restaurado em {{ banco_destino }}</h1>
+    <p class="muted">No sandbox {{ sandbox }}. Nenhum projeto real foi tocado.</p>
+  </div>
+  <div class="actions">
+    <a class="secondary" href="{{ url_for('projeto', slug=projeto.slug) }}">Voltar ao projeto</a>
+  </div>
+</div>
+
+<div class="details-grid">
+  <article class="info-card">
+    <span>Tabelas com dados</span><strong>{{ resultado.tabelas | length }}</strong>
+    <small>no banco restaurado</small>
+  </article>
+  <article class="info-card">
+    <span>Linhas restauradas</span><strong>{{ '{:,}'.format(resultado.tabelas.values() | sum).replace(',', '.') }}</strong>
+    <small>somando todas as tabelas</small>
+  </article>
+  <article class="info-card">
+    <span>Dump de segurança</span>
+    <strong>{% if resultado.dump_de_seguranca %}Criado{% else %}Dispensado{% endif %}</strong>
+    <small>{% if resultado.dump_de_seguranca %}o destino anterior foi preservado{% else %}o destino não existia{% endif %}</small>
+  </article>
+</div>
+
+<section class="panel">
+  <div class="panel-title"><div><h2>Conteúdo restaurado</h2><p>Contagem por tabela, lida do destino.</p></div></div>
+  {% for tabela, linhas in resultado.tabelas.items() %}
+    <div class="history-row" style="grid-template-columns:1fr 140px">
+      <span class="cell-value">{{ tabela }}</span>
+      <span class="cell-value">{{ '{:,}'.format(linhas).replace(',', '.') }} linhas</span>
+    </div>
+  {% else %}
+    <div class="linha-vazia">O dump não continha tabelas com dados.</div>
+  {% endfor %}
+</section>
+{% endblock %}

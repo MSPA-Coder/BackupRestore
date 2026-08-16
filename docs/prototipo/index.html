@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Protótipo local para gestão de backups PostgreSQL e de código." />
+    <title>BackupRestore — Protótipo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#dashboard" data-view-link="dashboard">
+          <span class="brand-mark">BR</span><span>Backup<span>Restore</span></span>
+        </a>
+        <p class="workspace-label">AMBIENTE LOCAL</p>
+        <nav aria-label="Navegação principal">
+          <a class="nav-link active" href="#dashboard" data-view-link="dashboard"><span class="nav-icon">VG</span>Visão geral</a>
+          <a class="nav-link" href="#projects" data-view-link="projects"><span class="nav-icon">PR</span>Projetos</a>
+          <a class="nav-link" href="#backups" data-view-link="backups"><span class="nav-icon">BK</span>Backups</a>
+          <a class="nav-link" href="#restore" data-view-link="restore"><span class="nav-icon">RS</span>Restaurar</a>
+          <a class="nav-link" href="#integrity" data-view-link="integrity"><span class="nav-icon">IN</span>Integridade</a>
+          <a class="nav-link" href="#retention" data-view-link="retention"><span class="nav-icon">RT</span>Retenção</a>
+          <a class="nav-link" href="#history" data-view-link="history"><span class="nav-icon">HI</span>Histórico</a>
+          <a class="nav-link" href="#settings" data-view-link="settings"><span class="nav-icon">CO</span>Configurações</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status-dot"></span> Serviço local ativo<br />
+          <small>Dados apenas demonstrativos</small>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div><span class="crumb">BackupRestore /</span> <strong id="breadcrumb">Visão geral</strong></div>
+          <div class="local-user"><span>MS</span><small>Usuário local</small></div>
+        </header>
+
+        <section id="dashboard" class="view active">
+          <div class="page-heading">
+            <div><p class="eyebrow">PAINEL</p><h1>Backups sob controle.</h1><p class="muted">Uma visão única dos bancos PostgreSQL e pacotes de código.</p></div>
+            <button class="primary" data-demo="Cadastro de projeto">+ Cadastrar projeto</button>
+          </div>
+          <div class="context-bar">
+            <div><span class="context-label">DESTINO CENTRAL</span><strong>D:\Backups\BackupRestore</strong></div>
+            <div><span class="context-label">ESPAÇO LIVRE</span><strong>981,6 GB</strong></div>
+            <div class="context-good"><span class="status-dot"></span>Destino acessível</div>
+          </div>
+          <div class="metric-grid">
+            <article class="metric"><span>Projetos ativos</span><strong>4</strong><small>todos configurados</small></article>
+            <article class="metric"><span>Dumps PostgreSQL</span><strong>38</strong><small>12,8 GB armazenados</small></article>
+            <article class="metric"><span>Pacotes de código</span><strong>37</strong><small>5,6 GB armazenados</small></article>
+            <article class="metric warning"><span>Requer atenção</span><strong>1</strong><small>última operação falhou</small></article>
+          </div>
+          <section class="panel">
+            <div class="panel-title"><div><h2>Projetos</h2><p>Condição atual e backups mais recentes.</p></div><button class="text-button" data-go="projects">Ver catálogo</button></div>
+            <div id="project-summary" class="project-list"></div>
+          </section>
+        </section>
+
+        <section id="projects" class="view">
+          <div class="page-heading">
+            <div><p class="eyebrow">CATÁLOGO</p><h1>Projetos</h1><p class="muted">Banco e código são configurados e operados de forma independente.</p></div>
+            <div class="actions"><button class="secondary" data-demo="Descoberta de projetos">Descobrir projetos</button><button class="primary" data-demo="Cadastro de projeto">+ Cadastrar</button></div>
+          </div>
+          <div class="panel"><div id="projects-table" class="table"></div></div>
+        </section>
+
+        <section id="backups" class="view">
+          <div class="page-heading"><div><p class="eyebrow">WORKSPACE / ARTEFATOS</p><h1>Backups</h1><p class="muted">Catálogo central de dumps PostgreSQL e pacotes independentes de código.</p></div></div>
+          <div class="prototype-filters"><button class="filter-chip active">Todos os projetos</button><button class="filter-chip">Banco</button><button class="filter-chip">Código</button></div>
+          <section class="panel"><div class="artifact-header"><span>Artefato</span><span>Projeto</span><span>Tipo</span><span>Tamanho</span><span>Integridade</span><span>Criado em</span><span></span></div><div id="artifact-list"></div></section>
+        </section>
+
+        <section id="restore" class="view">
+          <div class="page-heading"><div><p class="eyebrow">OPERAÇÃO CONTROLADA</p><h1>Restaurar banco</h1><p class="muted">Cada restauração valida o dump e mostra o impacto antes de alterar o destino.</p></div></div>
+          <div class="restore-steps"><article><span>01</span><div><strong>Selecione o dump</strong><p>Somente backups de banco íntegros aparecem na lista.</p></div></article><article><span>02</span><div><strong>Confirme o impacto</strong><p>Uma salvaguarda do banco atual é criada antes da etapa destrutiva.</p></div></article></div>
+          <section class="panel"><div id="restore-list"></div></section>
+        </section>
+
+        <section id="integrity" class="view">
+          <div class="page-heading"><div><p class="eyebrow">CONTROLE DE QUALIDADE</p><h1>Integridade</h1><p class="muted">Revalide hashes e evidências dos artefatos antes de depender deles.</p></div><button class="primary" data-demo="Validação de integridade iniciada">Validar todos</button></div>
+          <div class="metric-grid compact-metrics"><article class="metric"><span>Íntegros</span><strong>74</strong><small>hash e formato aprovados</small></article><article class="metric warning"><span>Precisam de atenção</span><strong>1</strong><small>última operação falhou</small></article><article class="metric"><span>Última verificação</span><strong>Hoje</strong><small>09:47</small></article></div>
+          <section class="panel"><div class="artifact-header"><span>Artefato</span><span>Projeto</span><span>Tipo</span><span>Hash SHA-256</span><span>Validado em</span><span>Estado</span><span></span></div><div id="integrity-list"></div></section>
+        </section>
+
+        <section id="retention" class="view">
+          <div class="page-heading"><div><p class="eyebrow">GOVERNANÇA DE ARMAZENAMENTO</p><h1>Retenção</h1><p class="muted">As cópias mais antigas só são removidas depois que uma nova cópia íntegra é publicada.</p></div></div>
+          <div class="settings-note policy-note"><strong>Regra de proteção</strong><p>O último artefato íntegro de cada tipo e os itens fixados não são removidos automaticamente.</p></div>
+          <div id="retention-list" class="retention-grid"></div>
+        </section>
+
+        <section id="project-detail" class="view">
+          <button class="back" data-go="projects">← Voltar aos projetos</button>
+          <div class="page-heading detail-heading">
+            <div><p class="eyebrow">PROJETO</p><h1 id="detail-title">Controle Bancário</h1><p class="muted path-text" id="detail-path"></p></div>
+            <div class="actions"><button class="secondary" data-demo="Edição do projeto">Editar</button><button class="primary" data-demo="Backup PostgreSQL iniciado">Backup do banco</button><button class="primary mint-button" data-demo="Backup de código iniciado">Backup do código</button></div>
+          </div>
+          <div class="health-strip" aria-label="Validações do projeto">
+            <span><i></i>Repositório Git válido</span><span><i></i>.gitignore localizado</span><span><i></i>PostgreSQL conectado</span><span><i></i>Credenciais disponíveis</span>
+          </div>
+          <div class="details-grid">
+            <article class="info-card"><span>Banco de dados</span><strong>PostgreSQL 16</strong><small>localhost:5432 / controle_bancario</small></article>
+            <article class="info-card"><span>Backup de código</span><strong>ZIP pelo aplicativo</strong><small>Arquivos selecionados pelas regras do Git</small></article>
+            <article class="info-card"><span>Retenção</span><strong>10 por tipo</strong><small>remoção controlada das cópias mais antigas</small></article>
+          </div>
+          <div class="tabs" role="tablist">
+            <button class="tab active" data-tab="database" role="tab">Banco de dados <span id="db-count"></span></button>
+            <button class="tab" data-tab="code" role="tab">Código <span id="code-count"></span></button>
+          </div>
+          <section class="panel backup-panel">
+            <div class="panel-title"><div><h2 id="backup-heading">Backups de banco</h2><p id="backup-subtitle"></p></div><button class="text-button" data-demo="Filtros">Filtrar</button></div>
+            <div id="backup-list" class="backup-list"></div>
+          </section>
+        </section>
+
+        <section id="history" class="view">
+          <div class="page-heading"><div><p class="eyebrow">AUDITORIA</p><h1>Histórico de operações</h1><p class="muted">Backups, restaurações e falhas registrados localmente.</p></div><button class="secondary" data-demo="Filtros do histórico">Filtrar histórico</button></div>
+          <section class="panel"><div class="history-header"><span>Quando</span><span>Operação</span><span>Projeto</span><span>Resultado</span></div><div id="history-list" class="history-list"></div></section>
+        </section>
+
+        <section id="settings" class="view">
+          <div class="page-heading"><div><p class="eyebrow">CONFIGURAÇÃO</p><h1>Configurações gerais</h1><p class="muted">Preferências compartilhadas por todos os projetos.</p></div></div>
+          <section class="panel settings">
+            <label>Pasta central de backups<input value="D:\Backups\BackupRestore" readonly /></label>
+            <label>Pasta para descoberta de projetos<input value="C:\Users\MSPA\Dropbox\Programacao\VSCodeProjects" readonly /></label>
+            <div class="settings-row"><label>Retenção padrão do banco<input value="10 dumps" readonly /></label><label>Retenção padrão do código<input value="10 pacotes ZIP" readonly /></label></div>
+            <div class="settings-note"><strong>Escopo local</strong><p>Sem login, compartilhamento ou acesso externo. Credenciais permanecem no armazenamento local da aplicação.</p></div>
+            <button class="primary" data-demo="Configurações salvas">Salvar alterações</button>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="backup-dialog">
+      <button class="dialog-close" aria-label="Fechar">×</button>
+      <p class="eyebrow" id="dialog-eyebrow">BACKUP</p><h2 id="dialog-title"></h2><p class="muted" id="dialog-description"></p>
+      <div class="dialog-data" id="dialog-data"></div>
+      <div class="danger-note" id="restore-warning"><strong>Confirmação obrigatória</strong><p>A restauração substituirá o conteúdo atual do banco de destino.</p></div>
+      <div class="dialog-actions"><button class="secondary dialog-close-action">Cancelar</button><button class="primary" data-demo="Demonstração: nenhuma operação real foi executada">Continuar</button></div>
+    </dialog>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

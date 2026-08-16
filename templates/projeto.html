@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% set secao = 'projetos' %}
+{% block titulo %}{{ projeto.nome }} — BackupRestore{% endblock %}
+{% block trilha %}{{ projeto.nome }}{% endblock %}
+
+{% block conteudo %}
+<a class="back" href="{{ url_for('painel') }}">← Voltar ao painel</a>
+
+<div class="page-heading detail-heading">
+  <div>
+    <p class="eyebrow">PROJETO</p>
+    <h1>{{ projeto.nome }}</h1>
+    <p class="muted path-text">{{ projeto.caminho }}</p>
+  </div>
+  <div class="actions">
+    <form method="post" action="{{ url_for('disparar_backup', slug=projeto.slug) }}">
+      <button class="primary" type="submit">Fazer backup agora</button>
+    </form>
+  </div>
+</div>
+
+<div class="health-strip" aria-label="Configuração do projeto">
+  <span><i></i>Contêiner {{ projeto.container }}</span>
+  <span><i></i>Banco {{ projeto.banco }} (usuário {{ projeto.usuario }})</span>
+  <span><i></i>Retenção {{ projeto.retencao }} por tipo</span>
+  <span><i></i>{% if projeto.e_repo_git %}Repositório Git válido{% else %}Sem repositório Git{% endif %}</span>
+</div>
+
+<div id="acompanhamento"></div>
+
+<div class="tabs" role="tablist">
+  {% for chave, rotulo in rotulos.items() %}
+    <a class="tab {% if tipo == chave %}active{% endif %}"
+       href="{{ url_for('projeto', slug=projeto.slug, tipo=chave) }}">
+      {{ rotulo }} <span>{{ contagens[chave] }}</span>
+    </a>
+  {% endfor %}
+</div>
+
+<section class="panel backup-panel">
+  <div class="panel-title">
+    <div>
+      <h2>{{ rotulos[tipo] }}</h2>
+      <p>
+        {% if tipo == 'banco' %}Dumps <code>pg_dump --format=custom</code>, verificados com <code>pg_restore --list</code>.
+        {% else %}ZIP gerado pelo aplicativo com arquivos rastreados e não ignorados pelo Git.{% endif %}
+      </p>
+    </div>
+  </div>
+  <div class="backup-list">
+    {% for a in artefatos %}
+      <div class="backup-row">
+        <div>
+          <div class="backup-file">{{ a.caminho_relativo.split('/')[-1] }}</div>
+          <div class="backup-date">
+            {{ a.criado_em | momento }}
+            {% if a.finalidade == 'pre_restauracao' %} · dump de segurança{% endif %}
+            {% if a.duracao_ms %} · {{ '%.1f' % (a.duracao_ms / 1000) }}s{% endif %}
+          </div>
+        </div>
+        <div><span class="cell-label">Tamanho</span><span class="cell-value">{{ a.bytes | tamanho }}</span></div>
+        <div>
+          {% if a.situacao == 'valido' %}<span class="tag">Íntegro</span>
+          {% elif a.situacao == 'corrompido' %}<span class="tag fail">Corrompido</span>
+          {% elif a.situacao == 'ausente' %}<span class="tag fail">Ausente</span>
+          {% else %}<span class="tag warn">{{ a.situacao | capitalize }}</span>{% endif %}
+        </div>
+        <div>
+          <span class="cell-label">SHA-256</span>
+          <span class="sha">{{ a.sha256[:24] if a.sha256 else '—' }}…</span>
+        </div>
+        <div class="acoes-linha">
+          <form method="post" action="{{ url_for('fixar', artefato_id=a.id) }}">
+            <button class="secondary" type="submit" title="Artefato fixado não é removido pela retenção">
+              {% if a.fixado %}Soltar{% else %}Fixar{% endif %}
+            </button>
+          </form>
+          {% if tipo == 'banco' and a.situacao == 'valido' %}
+            <a class="secondary" href="{{ url_for('tela_restaurar', artefato_id=a.id) }}">Restaurar</a>
+          {% endif %}
+        </div>
+      </div>
+    {% else %}
+      <div class="linha-vazia">Nenhum artefato deste tipo ainda. Use “Fazer backup agora”.</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

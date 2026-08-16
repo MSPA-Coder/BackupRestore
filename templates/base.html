@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block titulo %}BackupRestore{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="{{ url_for('painel') }}">
+          <span class="brand-mark">BR</span><span>Backup<span>Restore</span></span>
+        </a>
+        <p class="workspace-label">OPERAÇÕES LOCAIS</p>
+        <nav aria-label="Navegação principal">
+          <a class="nav-link {% if secao == 'painel' %}active{% endif %}" href="{{ url_for('painel') }}"><span class="nav-icon">VG</span>Visão geral</a>
+          <a class="nav-link {% if secao == 'projetos' %}active{% endif %}" href="{{ url_for('listar_projetos') }}"><span class="nav-icon">PR</span>Projetos</a>
+          <a class="nav-link {% if secao == 'backups' %}active{% endif %}" href="{{ url_for('backups') }}"><span class="nav-icon">BK</span>Backups</a>
+          <a class="nav-link {% if secao == 'restaurar' %}active{% endif %}" href="{{ url_for('restaurar_catalogo') }}"><span class="nav-icon">RS</span>Restaurar</a>
+          <a class="nav-link {% if secao == 'integridade' %}active{% endif %}" href="{{ url_for('integridade') }}"><span class="nav-icon">IN</span>Integridade</a>
+          <a class="nav-link {% if secao == 'retencao' %}active{% endif %}" href="{{ url_for('retencao') }}"><span class="nav-icon">RT</span>Retenção</a>
+          <a class="nav-link {% if secao == 'historico' %}active{% endif %}" href="{{ url_for('historico') }}"><span class="nav-icon">HI</span>Histórico</a>
+          <a class="nav-link {% if secao == 'configuracoes' %}active{% endif %}" href="{{ url_for('configuracoes') }}"><span class="nav-icon">CO</span>Configurações</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status-dot"></span> Motor local ativo<br />
+          <small>Backups e restaurações reais</small>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div><span class="crumb">BackupRestore /</span> <strong>{% block trilha %}Visão geral{% endblock %}</strong></div>
+          <div class="local-user"><span>MS</span><small>Usuário local</small></div>
+        </header>
+        <section class="view active">{% block conteudo %}{% endblock %}</section>
+      </main>
+    </div>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  </body>
+</html>

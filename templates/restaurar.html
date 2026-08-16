@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% set secao = 'projetos' %}
+{% block titulo %}Restaurar — {{ projeto.nome }}{% endblock %}
+{% block trilha %}Restauração{% endblock %}
+
+{% block conteudo %}
+<a class="back" href="{{ url_for('projeto', slug=projeto.slug) }}">← Voltar ao projeto</a>
+
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">RESTAURAÇÃO DE BANCO</p>
+    <h1>{{ artefato.caminho_relativo.split('/')[-1] }}</h1>
+    <p class="muted">Operação destrutiva no banco de destino. Leia antes de confirmar.</p>
+  </div>
+</div>
+
+{% if erro %}
+  <div class="aviso-erro" style="margin-bottom:20px"><strong>Recusado.</strong> {{ erro }}</div>
+{% endif %}
+
+<div class="details-grid">
+  <article class="info-card"><span>Origem</span><strong>{{ projeto.nome }}</strong><small>{{ artefato.criado_em | momento }}</small></article>
+  <article class="info-card"><span>Tamanho</span><strong>{{ artefato.bytes | tamanho }}</strong><small>formato custom</small></article>
+  <article class="info-card"><span>Destino</span><strong>{{ sandbox }}</strong><small>contêiner descartável</small></article>
+</div>
+
+<section class="panel">
+  <div class="panel-title"><div><h2>Confirmação</h2><p>Três travas antes de qualquer escrita.</p></div></div>
+
+  <div class="form-restauracao">
+    <div class="danger-note">
+      <strong>O banco <code>{{ banco_destino }}</code> será apagado e recriado.</strong>
+      <p>
+        O destino é sempre o sandbox <code>{{ sandbox }}</code>. Os contêineres dos projetos
+        reais são recusados pelo motor e não aparecem como opção — restaurar sobre um deles
+        é trabalho manual, com o procedimento do RESTAURAR.md.
+      </p>
+    </div>
+
+    <div class="settings-note">
+      <strong>Antes de sobrescrever, um dump de segurança do destino</strong>
+      <p>
+        Se <code>{{ banco_destino }}</code> já existir, o estado atual é dumpado e verificado
+        primeiro. Se esse dump falhar, a restauração é abortada e nada é tocado.
+      </p>
+    </div>
+
+    <div class="settings-note">
+      <strong>Integridade reconferida agora</strong>
+      <p>
+        O SHA-256 do arquivo é recalculado e comparado com o catálogo no momento da
+        restauração — não basta ter sido válido quando foi gravado.
+      </p>
+      <p class="sha">{{ artefato.sha256 }}</p>
+    </div>
+
+    {% if sandbox_disponivel %}
+      <form method="post" action="{{ url_for('executar_restauracao', artefato_id=artefato.id) }}">
+        <label>
+          Para confirmar, digite <code>{{ banco_destino }}</code>
+          <input class="confirmar-campo" name="confirmacao" autocomplete="off" required
+                 placeholder="{{ banco_destino }}" />
+        </label>
+        <div class="dialog-actions" style="margin-top:16px">
+          <a class="secondary" href="{{ url_for('projeto', slug=projeto.slug) }}">Cancelar</a>
+          <button class="primary" type="submit">Restaurar no sandbox</button>
+        </div>
+      </form>
+    {% else %}
+      <div class="aviso-erro">
+        O sandbox não está criado. Suba com:
+        <br /><code>docker compose -f compose.teste.yaml up -d</code>
+      </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

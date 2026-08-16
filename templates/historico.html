@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% set secao = 'historico' %}
+{% block titulo %}Histórico — BackupRestore{% endblock %}
+{% block trilha %}Histórico{% endblock %}
+
+{% block conteudo %}
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">AUDITORIA</p>
+    <h1>Histórico de operações</h1>
+    <p class="muted">Backups, restaurações e falhas registrados localmente.</p>
+  </div>
+</div>
+
+<section class="panel" style="margin-bottom:26px">
+  <div class="panel-title"><div><h2>Execuções</h2><p>O que o motor rodou, com duração e resultado.</p></div></div>
+  <div class="history-header"><span>Quando</span><span>Operação</span><span>Projeto</span><span>Resultado</span></div>
+  {% for e in execucoes %}
+    <div class="history-row">
+      <span class="backup-date">{{ e.pedido_em | momento }}</span>
+      <span class="operation">
+        {{ e.operacao | capitalize }}
+        {% if e.situacao == 'rodando' and e.fase %}<br /><small class="muted">{{ e.fase }}</small>{% endif %}
+      </span>
+      <span class="cell-value">{{ e.projeto }}</span>
+      <span>
+        {% if e.situacao == 'sucesso' %}<span class="tag">Concluído</span>
+        {% elif e.situacao == 'falha' %}<span class="tag fail">Falhou</span>
+        {% else %}<span class="tag warn">{{ e.situacao | capitalize }}</span>{% endif %}
+      </span>
+    </div>
+  {% else %}
+    <div class="linha-vazia">Nenhuma execução registrada.</div>
+  {% endfor %}
+</section>
+
+<section class="panel">
+  <div class="panel-title"><div><h2>Eventos</h2><p>Trilha detalhada, incluindo retenção e dumps de segurança.</p></div></div>
+  {% for ev in eventos %}
+    <div class="history-row">
+      <span class="backup-date">{{ ev.momento | momento }}</span>
+      <span class="operation">{{ ev.tipo }}</span>
+      <span class="cell-value">{{ ev.mensagem }}</span>
+      <span>
+        {% if ev.severidade == 'erro' %}<span class="tag fail">Erro</span>
+        {% elif ev.severidade == 'aviso' %}<span class="tag warn">Aviso</span>
+        {% else %}<span class="tag">Info</span>{% endif %}
+      </span>
+    </div>
+  {% else %}
+    <div class="linha-vazia">Nenhum evento registrado.</div>
+  {% endfor %}
+</section>
+{% endblock %}

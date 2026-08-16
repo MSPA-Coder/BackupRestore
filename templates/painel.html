@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% set secao = 'painel' %}
+{% block titulo %}BackupRestore — visão geral{% endblock %}
+{% block trilha %}Visão geral{% endblock %}
+
+{% block conteudo %}
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">PAINEL</p>
+    <h1>Backups sob controle.</h1>
+    <p class="muted">Dumps PostgreSQL e pacotes ZIP de código dos projetos protegidos.</p>
+  </div>
+</div>
+
+<div class="context-bar">
+  <div><span class="context-label">DESTINO CENTRAL</span><strong>{{ raiz }}</strong></div>
+  <div><span class="context-label">ESPAÇO LIVRE</span><strong>{{ espaco_livre | tamanho }}</strong></div>
+  <div class="context-good"><span class="status-dot"></span>Destino acessível</div>
+</div>
+
+<div class="metric-grid">
+  <article class="metric"><span>Projetos</span><strong>{{ projetos | length }}</strong><small>todos configurados</small></article>
+  <article class="metric"><span>Artefatos válidos</span><strong>{{ total_artefatos }}</strong><small>{{ total_bytes | tamanho }} armazenados</small></article>
+  <article class="metric"><span>Em andamento</span><strong>{{ em_andamento | length }}</strong><small>operações agora</small></article>
+  <article class="metric {% if problemas %}warning{% endif %}">
+    <span>Requer atenção</span><strong>{{ problemas | length }}</strong>
+    <small>{% if problemas %}artefatos ausentes ou corrompidos{% else %}nada pendente{% endif %}</small>
+  </article>
+</div>
+
+<section class="panel" id="projetos">
+  <div class="panel-title">
+    <div><h2>Projetos</h2><p>Último artefato válido de cada tipo.</p></div>
+  </div>
+  <div class="table">
+    <div class="project-row"><span>Projeto</span><span>Banco</span><span>Código</span><span>Estado</span></div>
+    {% for p in projetos %}
+      {% set r = resumos[p.slug] %}
+      {% set ultima = r.ultima_execucao %}
+      <div class="project-row">
+        <div>
+          <div class="project-name">{{ p.nome }}</div>
+          <div class="project-path" title="{{ p.caminho }}">{{ p.caminho }}</div>
+        </div>
+        {% for tipo in ['banco', 'codigo'] %}
+          <div>
+            <span class="cell-label">{{ tipo | capitalize }}</span>
+            <span class="cell-value">
+              {% if r[tipo] %}{{ r[tipo].criado_em | momento }}{% else %}—{% endif %}
+            </span>
+          </div>
+        {% endfor %}
+        <div class="state-cell">
+          {% if ultima and ultima.situacao == 'falha' %}
+            <span class="tag fail">Falhou</span>
+          {% elif ultima and ultima.situacao in ('fila', 'rodando') %}
+            <span class="tag warn">Rodando</span>
+          {% elif r.banco and r.codigo %}
+            <span class="tag">Íntegro</span>
+          {% else %}
+            <span class="tag warn">Incompleto</span>
+          {% endif %}
+          <a class="open-link" href="{{ url_for('projeto', slug=p.slug) }}">Abrir →</a>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
