@@ -133,6 +133,11 @@ dele.** É o `cli.py ensaio`.
 `compose.teste.yaml` sobe um PostgreSQL descartável na porta 5439. É o único
 destino de restauração que a ferramenta aceita.
 
+O processo do sandbox roda como `postgres`, sem capabilities e com filesystem
+raiz somente leitura; apenas o volume descartável de dados e os diretórios
+transitórios em `tmpfs` permanecem graváveis. Isso não altera o procedimento de
+descarte nem os artefatos de backup.
+
 ```bash
 docker compose -f compose.teste.yaml up -d
 docker compose -f compose.teste.yaml down -v    # descarta
