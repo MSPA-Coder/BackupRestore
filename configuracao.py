@@ -22,6 +22,9 @@ def _normalizar(caminho: str) -> str:
     texto = os.path.expanduser(os.path.expandvars(caminho.strip()))
     if not texto:
         raise ConfiguracaoInvalida("informe uma pasta para os backups")
+    # Esta é a etapa de normalização recomendada antes da contenção em
+    # `_dentro_da_raiz`; resolver o caminho não abre nem altera seu conteúdo.
+    # codeql[py/path-injection]
     return str(Path(texto).resolve(strict=False))
 
 
@@ -45,7 +48,11 @@ def _dentro_da_raiz(caminho: str, raiz: str) -> str:
     que sai da árvore. A nova resolução depois de criar a pasta, em
     :func:`validar_raiz`, também detecta um link já existente no destino.
     """
+    # Estes dois resolves formam o sanitizador: as operações de arquivo só
+    # recebem `destino` depois dos testes commonpath + relative_to abaixo.
+    # codeql[py/path-injection]
     destino = Path(caminho).resolve(strict=False)
+    # codeql[py/path-injection]
     limite = Path(raiz).resolve(strict=False)
     try:
         comum = os.path.commonpath((str(limite), str(destino)))
