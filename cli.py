@@ -11,6 +11,7 @@ A interface da Fase 2 usa exatamente as mesmas funções; nada de execução viv
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 import banco
@@ -21,7 +22,7 @@ from projetos import (
     PROJETOS,
     por_slug,
 )
-from configuracao import raiz_backup
+from configuracao import ConfiguracaoInvalida, configurar_raiz_backup, raiz_backup
 
 USUARIO_SANDBOX = "sandbox"
 
@@ -77,6 +78,31 @@ def comando_verificar(args: argparse.Namespace) -> int:
     print(f"   ausentes:   {contagem['ausentes']}")
     print(f"   corrompidos:{contagem['corrompidos']}")
     return 1 if (contagem["ausentes"] or contagem["corrompidos"]) else 0
+
+
+def comando_configurar_raiz(args: argparse.Namespace) -> int:
+    """Única via de escrita da configuração de destino: operador no host."""
+    if banco.listar_artefatos(limite=1):
+        try:
+            atual = os.path.normcase(os.path.normpath(raiz_backup()))
+            solicitado = os.path.normcase(os.path.normpath(os.path.abspath(args.caminho)))
+        except ConfiguracaoInvalida as erro:
+            print(f"Configuração atual inválida: {erro}", file=sys.stderr)
+            return 2
+        if solicitado != atual:
+            print(
+                "O destino não pode mudar enquanto existem artefatos catalogados. "
+                "Migre arquivos e catálogo conscientemente antes de alterar a raiz.",
+                file=sys.stderr,
+            )
+            return 2
+    try:
+        raiz = configurar_raiz_backup(args.caminho, permitida=args.permitida)
+    except ConfiguracaoInvalida as erro:
+        print(f"Configuração recusada: {erro}", file=sys.stderr)
+        return 2
+    print(f"Destino configurado: {raiz}")
+    return 0
 
 
 def comando_restaurar(args: argparse.Namespace) -> int:
@@ -176,6 +202,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--projeto")
     p.set_defaults(funcao=comando_verificar)
 
+    p = sub.add_parser(
+        "configurar-raiz",
+        help="define localmente a raiz de backup e seu limite permitido",
+    )
+    p.add_argument("caminho", help="destino dos artefatos")
+    p.add_argument(
+        "--permitida",
+        help="raiz permitida pelo operador; sem ela, o destino é o próprio limite",
+    )
+    p.set_defaults(funcao=comando_configurar_raiz)
+
     p = sub.add_parser("restaurar", help="restaura um dump num destino não protegido")
     p.add_argument("--artefato", type=int, required=True)
     p.add_argument("--destino-container", required=True)
@@ -193,5 +230,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    print(f"destino: {raiz_backup()}")
     sys.exit(main())

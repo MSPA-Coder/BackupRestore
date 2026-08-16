@@ -48,6 +48,12 @@ preserva estes contratos:
    bloqueados sem flag de bypass.
 7. SHA-256, tamanho e origem permanecem verificaveis pelo catalogo.
 
+A raiz de backup e seu limite permitido sao definidos somente pelo operador no
+host (`cli.py configurar-raiz` ou a variavel de processo
+`BACKUPRESTORE_RAIZ_PERMITIDA`). A interface em `127.0.0.1` e somente leitura
+para essa configuracao. Caminhos relativos do catalogo devem ser resolvidos e
+confirmados sob a raiz antes de leitura, remocao ou restauracao.
+
 O sandbox `backuprestore-sandbox` e o unico destino autorizado para restauracao
 automatica. Nunca aponte ensaios aos volumes operacionais. `down -v` somente e
 permitido para o Compose descartavel `compose.teste.yaml`, depois de confirmar o
