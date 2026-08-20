@@ -17,12 +17,14 @@ import sys
 import banco
 import motor
 import restaurar as restauracao
+import vps
 from projetos import (
+    AMBIENTE_VPS,
     CONTAINER_SANDBOX,
     PROJETOS,
     por_slug,
 )
-from configuracao import ConfiguracaoInvalida, configurar_raiz_backup, raiz_backup
+from configuracao import ConfiguracaoInvalida, configurar_raiz_backup, configurar_vps, raiz_backup
 
 USUARIO_SANDBOX = "sandbox"
 
@@ -37,7 +39,11 @@ def _tamanho(bytes_: int) -> str:
 
 
 def comando_backup(args: argparse.Namespace) -> int:
-    alvos = PROJETOS if args.todos else [por_slug(args.projeto)]
+    # "--todos" continua sendo só os projetos locais: motor.fazer_backup
+    # recusa qualquer outro ambiente, e ainda não existe via de produção para
+    # eles (Fase 4 do plano do VPS). Pedir um projeto de outro ambiente por
+    # slug explícito segue permitido — e recusado com erro claro pelo motor.
+    alvos = [p for p in PROJETOS if p.ambiente == "local"] if args.todos else [por_slug(args.projeto)]
     tipos = tuple(args.tipos.split(",")) if args.tipos else None
 
     falhas = 0
@@ -105,6 +111,41 @@ def comando_configurar_raiz(args: argparse.Namespace) -> int:
     return 0
 
 
+def comando_sincronizar_vps(args: argparse.Namespace) -> int:
+    """Camada 2: busca, verifica e cataloga os dumps que o servidor produziu
+    sozinho (Camada 1). Nunca fala com um contêiner de projeto."""
+    alvos = [p for p in PROJETOS if p.ambiente == AMBIENTE_VPS] if args.todos else [por_slug(args.projeto)]
+
+    falhas = 0
+    for projeto in alvos:
+        print(f"\n== {projeto.nome} ==")
+        try:
+            resultado = vps.sincronizar_projeto(projeto)
+            print(f"   buscados: {resultado.buscados}   já existiam: {resultado.ja_existentes}   "
+                  f"reprovados: {resultado.reprovados}")
+            print(f"   apagados no servidor: {resultado.apagados}   "
+                  f"mantidos (mais recente): {resultado.mantidos}")
+            for aviso in resultado.avisos:
+                print(f"   AVISO: {aviso}", file=sys.stderr)
+        except Exception as erro:
+            falhas += 1
+            print(f"   FALHOU: {erro}", file=sys.stderr)
+    if falhas:
+        print(f"\n{falhas} projeto(s) falharam.", file=sys.stderr)
+    return 1 if falhas else 0
+
+
+def comando_configurar_vps(args: argparse.Namespace) -> int:
+    """Única via de escrita do alvo SSH do VPS: operador no host (D7)."""
+    try:
+        alvo = configurar_vps(args.host, args.usuario, args.chave)
+    except ConfiguracaoInvalida as erro:
+        print(f"Configuração recusada: {erro}", file=sys.stderr)
+        return 2
+    print(f"VPS configurado: {alvo['usuario']}@{alvo['host']}  (chave: {alvo['chave']})")
+    return 0
+
+
 def comando_restaurar(args: argparse.Namespace) -> int:
     try:
         resultado = restauracao.restaurar(
@@ -161,6 +202,19 @@ def comando_ensaio(args: argparse.Namespace) -> int:
         print(f"RECUSADO: {erro}", file=sys.stderr)
         return 2
 
+    if projeto.ambiente != "local":
+        # A origem é outra máquina — `comparar_com_origem` recusaria (ver a
+        # trava em restaurar.py), de propósito: o agente da Camada 2 só sabe
+        # listar/enviar/apagar/estado (D1), não tem verbo de consulta SQL, e
+        # não é para ganhar um só para isto. Aqui só confere o que a
+        # restauração produziu; bater com a produção é conferência manual.
+        resumo = restauracao.resumo_banco(CONTAINER_SANDBOX, USUARIO_SANDBOX, destino)
+        print(f"\n   RESTAURADO — {len(resumo)} tabela(s) com dados, "
+              f"{sum(resumo.values()):,} linha(s) no total.".replace(",", "."))
+        print(f"   Comparação automática com a origem não existe para ambiente="
+              f"{projeto.ambiente!r} (D1: o agente do VPS não tem verbo de consulta).")
+        return 0 if resumo else 1
+
     print("\nComparando com a origem…")
     comparacao = restauracao.comparar_com_origem(
         projeto, CONTAINER_SANDBOX, USUARIO_SANDBOX, destino
@@ -212,6 +266,24 @@ def main(argv: list[str] | None = None) -> int:
         help="raiz permitida pelo operador; sem ela, o destino é o próprio limite",
     )
     p.set_defaults(funcao=comando_configurar_raiz)
+
+    p = sub.add_parser(
+        "sincronizar-vps",
+        help="busca, verifica e cataloga os dumps que o VPS produziu (Camada 2)",
+    )
+    grupo = p.add_mutually_exclusive_group(required=True)
+    grupo.add_argument("--todos", action="store_true")
+    grupo.add_argument("--projeto")
+    p.set_defaults(funcao=comando_sincronizar_vps)
+
+    p = sub.add_parser(
+        "configurar-vps",
+        help="define o alvo SSH do VPS (host, usuário, chave) para a Camada 2 do backup",
+    )
+    p.add_argument("host", help="endereço ou apelido SSH do VPS")
+    p.add_argument("--usuario", default="ubuntu")
+    p.add_argument("--chave", required=True, help="caminho da chave SSH dedicada do agente")
+    p.set_defaults(funcao=comando_configurar_vps)
 
     p = sub.add_parser("restaurar", help="restaura um dump num destino não protegido")
     p.add_argument("--artefato", type=int, required=True)

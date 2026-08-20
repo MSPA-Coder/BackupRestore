@@ -121,6 +121,46 @@ def configurar_raiz_backup(caminho: str, *, permitida: str | None = None) -> str
     return raiz
 
 
+_CAMPOS_VPS = ("host", "usuario", "chave")
+
+
+def alvo_vps() -> dict[str, str] | None:
+    """Host, usuário e caminho da chave SSH dedicada da Camada 2, ou ``None``
+    se ainda não configurado. Somente leitura para a interface web (D7)."""
+    dados = _ler()
+    vps = dados.get("vps")
+    if not isinstance(vps, dict) or not all(vps.get(campo) for campo in _CAMPOS_VPS):
+        return None
+    return {campo: str(vps[campo]) for campo in _CAMPOS_VPS}
+
+
+def configurar_vps(host: str, usuario: str, chave: str) -> dict[str, str]:
+    """Persiste o alvo SSH do VPS. Única via de escrita: o comando local do
+    operador (``cli.py configurar-vps``) — a mesma regra da raiz de backup, e
+    pelo mesmo motivo: a interface em 127.0.0.1 não decide o que este host
+    acessa pela rede.
+    """
+    host = host.strip()
+    usuario = usuario.strip()
+    chave = os.path.expanduser(os.path.expandvars(chave.strip()))
+    if not host:
+        raise ConfiguracaoInvalida("informe o host do VPS")
+    if not usuario:
+        raise ConfiguracaoInvalida("informe o usuário SSH")
+    if not chave:
+        raise ConfiguracaoInvalida("informe o caminho da chave SSH")
+    if not os.path.isfile(chave):
+        raise ConfiguracaoInvalida(f"chave SSH não encontrada: {chave}")
+
+    dados = _ler()
+    dados["vps"] = {"host": host, "usuario": usuario, "chave": chave}
+    temporario = ARQUIVO_CONFIGURACAO + ".tmp"
+    with open(temporario, "w", encoding="utf-8") as arquivo:
+        json.dump(dados, arquivo, indent=2, ensure_ascii=False)
+    os.replace(temporario, ARQUIVO_CONFIGURACAO)
+    return dict(dados["vps"])
+
+
 def caminho_catalogo(caminho_relativo: str) -> str:
     """Converte um caminho POSIX do catálogo em arquivo contido na raiz."""
     if not isinstance(caminho_relativo, str) or not caminho_relativo:

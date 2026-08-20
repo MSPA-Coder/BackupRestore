@@ -8,21 +8,36 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import configuracao
 import cli
 import motor
 import restaurar
+import web
 from projetos import CONTAINERS_PROTEGIDOS, PROJETOS, por_slug
+
+PROJETO_LOCAL = next(p for p in PROJETOS if p.ambiente == "local")
+PROJETO_VPS = next(p for p in PROJETOS if p.ambiente == "vps")
 
 
 class ProjectCatalogTests(unittest.TestCase):
     def test_every_operational_container_is_protected(self) -> None:
         self.assertEqual(
             CONTAINERS_PROTEGIDOS,
-            frozenset(project.container for project in PROJETOS),
+            frozenset((project.ambiente, project.container) for project in PROJETOS),
         )
+
+    def test_local_and_vps_projects_share_container_names_by_design(self) -> None:
+        # A trava (D3) só faz sentido porque essa colisão é real, não um erro
+        # de digitação: local e VPS falam do mesmo contêiner por nome.
+        self.assertEqual(PROJETO_LOCAL.container, PROJETO_VPS.container)
+        self.assertNotEqual(PROJETO_LOCAL.slug, PROJETO_VPS.slug)
+
+    def test_vps_project_has_no_local_folder_or_code_type(self) -> None:
+        self.assertEqual(PROJETO_VPS.pasta, "")
+        self.assertFalse(PROJETO_VPS.e_repo_git)
+        self.assertNotIn("codigo", PROJETO_VPS.tipos)
 
     def test_unknown_slug_is_rejected(self) -> None:
         with self.assertRaises(KeyError):
@@ -31,12 +46,28 @@ class ProjectCatalogTests(unittest.TestCase):
 
 class RestoreGuardTests(unittest.TestCase):
     def test_protected_container_is_rejected_before_catalog_access(self) -> None:
-        protected = next(iter(CONTAINERS_PROTEGIDOS))
+        protected = PROJETO_LOCAL.container
         with patch.object(restaurar.banco, "obter_artefato") as get_artifact:
             with self.assertRaises(restaurar.RestauracaoRecusada):
                 restaurar.restaurar(
                     1,
                     container_destino=protected,
+                    banco_destino="destino",
+                    usuario_destino="sandbox",
+                    confirmacao="destino",
+                )
+        get_artifact.assert_not_called()
+
+    def test_vps_named_container_is_still_rejected_by_pair(self) -> None:
+        # O contêiner do projeto "vps" tem o mesmo nome do local — a trava
+        # continua barrando esse nome porque ("local", nome) está no
+        # conjunto, não porque o par "vps" está lá.
+        self.assertEqual(PROJETO_VPS.container, PROJETO_LOCAL.container)
+        with patch.object(restaurar.banco, "obter_artefato") as get_artifact:
+            with self.assertRaises(restaurar.RestauracaoRecusada):
+                restaurar.restaurar(
+                    1,
+                    container_destino=PROJETO_VPS.container,
                     banco_destino="destino",
                     usuario_destino="sandbox",
                     confirmacao="destino",
@@ -85,6 +116,32 @@ class RestoreGuardTests(unittest.TestCase):
         self.assertFalse(result["confere"])
         self.assertTrue(result["restauracao_valida"])
         self.assertEqual(result["divergencias"]["eventos"], (110, 100))
+
+    def test_non_local_backup_is_refused_before_touching_docker(self) -> None:
+        # Não usa o catálogo real: abrir/fechar execução são mockados, do
+        # mesmo jeito que as outras travas pré-`try` desta função fecham a
+        # execução antes de propagar o erro (sem isso, ela ficaria presa em
+        # "fila" — foi exatamente o bug encontrado ao testar isto na tela).
+        with (
+            patch.object(motor.banco, "abrir_execucao", return_value=999) as abrir,
+            patch.object(motor.banco, "fechar_execucao") as fechar,
+            patch.object(motor.banco, "registrar_evento") as registrar,
+            patch.object(motor, "estado_container") as estado_container,
+        ):
+            with self.assertRaises(motor.FalhaDeBackup):
+                motor.fazer_backup(PROJETO_VPS)
+        abrir.assert_called_once_with(PROJETO_VPS.slug, "backup")
+        fechar.assert_called_once_with(999, "falha", ANY)
+        registrar.assert_called_once()
+        estado_container.assert_not_called()
+
+    def test_non_local_origin_comparison_is_refused(self) -> None:
+        with patch.object(motor, "estado_container") as estado_container:
+            with self.assertRaises(RuntimeError):
+                restaurar.comparar_com_origem(
+                    PROJETO_VPS, "backuprestore-sandbox", "sandbox", "ensaio"
+                )
+        estado_container.assert_not_called()
 
     def test_catalog_traversal_is_refused_before_restore(self) -> None:
         artefato = {"tipo": "banco", "caminho_relativo": "../fora.dump", "projeto": "mega_sena"}
@@ -178,6 +235,15 @@ class BackupRootGuardTests(unittest.TestCase):
                 self.assertNotIn("POST", regras[0].methods)
             sys.modules.pop("web", None)
 
+    def test_web_does_not_expose_vps_change_post(self) -> None:
+        # Irmão de test_web_does_not_expose_root_change_post (D7): a interface
+        # nem sequer importa a função de escrita, então não há como uma rota
+        # vir a chamá-la por engano.
+        self.assertFalse(hasattr(web, "configurar_vps"))
+        regras = [r for r in web.app.url_map.iter_rules() if r.rule == "/configuracoes"]
+        self.assertEqual(len(regras), 1)
+        self.assertNotIn("POST", regras[0].methods)
+
     def test_permitida_can_change_without_changing_catalog_root(self) -> None:
         raiz = os.path.abspath("C:/backups/BackupRestore")
         argumentos = type("Args", (), {"caminho": raiz, "permitida": "C:/backups"})()
@@ -188,6 +254,70 @@ class BackupRootGuardTests(unittest.TestCase):
         ):
             self.assertEqual(cli.comando_configurar_raiz(argumentos), 0)
         configurar.assert_called_once_with(raiz, permitida="C:/backups")
+
+
+class VpsTargetConfigTests(unittest.TestCase):
+    def test_unconfigured_target_is_none(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(Path(directory, "config.json"))):
+                self.assertIsNone(configuracao.alvo_vps())
+
+    def test_missing_key_file_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(Path(directory, "config.json"))):
+                with self.assertRaises(configuracao.ConfiguracaoInvalida):
+                    configuracao.configurar_vps(
+                        "163.176.214.214", "ubuntu", str(Path(directory, "nao-existe.key"))
+                    )
+
+    def test_valid_target_is_persisted_and_readable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            chave = Path(directory, "chave.key")
+            chave.write_text("fake")
+            with patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(Path(directory, "config.json"))):
+                configuracao.configurar_vps("163.176.214.214", "ubuntu", str(chave))
+                alvo = configuracao.alvo_vps()
+        self.assertEqual(
+            alvo, {"host": "163.176.214.214", "usuario": "ubuntu", "chave": str(chave)}
+        )
+
+    def test_configuring_vps_preserves_existing_backup_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            chave = Path(directory, "chave.key")
+            chave.write_text("fake")
+            arquivo = Path(directory, "config.json")
+            arquivo.write_text(json.dumps({"raiz_backup": "D:/Backups/BackupRestore"}))
+            with patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(arquivo)):
+                configuracao.configurar_vps("163.176.214.214", "ubuntu", str(chave))
+                dados = json.loads(arquivo.read_text())
+        self.assertEqual(dados["raiz_backup"], "D:/Backups/BackupRestore")
+        self.assertEqual(dados["vps"]["host"], "163.176.214.214")
+
+
+class EnsaioVpsTests(unittest.TestCase):
+    def test_ensaio_de_projeto_vps_pula_comparacao_com_origem(self) -> None:
+        # `comparar_com_origem` recusaria (guarda da Fase 3: o contêiner do
+        # projeto vps colide de nome com o local). `cli.comando_ensaio` não
+        # deve nem chamá-la para um projeto de ambiente != local — confere só
+        # o que a restauração produziu no sandbox.
+        artefato = {"id": 1, "caminho_relativo": "projects/x/banco/x.dump", "projeto": PROJETO_VPS.slug}
+        argumentos = type("Args", (), {"projeto": PROJETO_VPS.slug})()
+
+        with (
+            patch.object(cli.banco, "artefatos_validos", return_value=[artefato]),
+            patch.object(cli.motor, "estado_container", return_value=(True, True)),
+            patch.object(cli.restauracao, "restaurar", return_value={}) as restaurar_mock,
+            patch.object(
+                cli.restauracao, "resumo_banco", return_value={"tabela": 5}
+            ) as resumo_mock,
+            patch.object(cli.restauracao, "comparar_com_origem") as comparar_mock,
+        ):
+            codigo = cli.comando_ensaio(argumentos)
+
+        self.assertEqual(codigo, 0)
+        restaurar_mock.assert_called_once()
+        resumo_mock.assert_called_once()
+        comparar_mock.assert_not_called()
 
 
 class ArtifactValidationTests(unittest.TestCase):

@@ -384,6 +384,24 @@ def fazer_backup(
     if proprio:
         execucao_id = banco.abrir_execucao(projeto.slug, "backup")
 
+    if projeto.ambiente != "local":
+        # Produção por contêiner só faz sentido para o Docker deste host. Um
+        # projeto de outro ambiente (hoje, "vps") tem o mesmo nome de
+        # contêiner do projeto local por coincidência (ver projetos.py) — sem
+        # esta trava, isto dispararia pg_dump no contêiner local e gravaria o
+        # resultado no catálogo com o rótulo errado. Os artefatos desse
+        # ambiente chegam por outro caminho (busca ao servidor, Fase 4 do
+        # plano) que ainda não existe. Fecha a execução como as demais travas
+        # pré-`try` desta função — senão ela fica presa em "fila" para sempre.
+        erro = (
+            f"{projeto.slug}: ambiente {projeto.ambiente!r} não produz backup por "
+            "contêiner — essa via ainda não existe"
+        )
+        banco.registrar_evento("backup.falha", erro, projeto=projeto.slug,
+                               execucao_id=execucao_id, severidade="erro")
+        banco.fechar_execucao(execucao_id, "falha", erro)
+        raise FalhaDeBackup(erro)
+
     precisa_banco = "banco" in tipos
     existe, estava_rodando = estado_container(projeto.container)
     if precisa_banco and not existe:
