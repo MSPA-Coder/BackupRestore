@@ -3,13 +3,20 @@
 ## Papel e fontes de verdade
 
 BackupRestore roda no host Windows e coordena backup e ensaio de restauracao dos
-quatro projetos web. Ele nao e containerizado porque isso exigiria conceder a um
-container acesso privilegiado ao daemon Docker.
+quatro projetos web locais, alem de buscar e catalogar os dumps que o VPS
+produz sozinho (Camada 2 do backup de producao). Ele nao e containerizado
+porque isso exigiria conceder a um container acesso privilegiado ao daemon
+Docker.
 
 - `README.md`: instalacao, operacao e formato dos artefatos.
 - `RESTAURAR.md`: recuperacao manual e limites do backup.
-- `projetos.py`: projetos conhecidos, bancos e containers protegidos.
-- `motor.py` e `restaurar.py`: contratos de integridade e restauracao.
+- `projetos.py`: os oito projetos (quatro locais, quatro de origem VPS, campo
+  `ambiente`) e os containers protegidos.
+- `motor.py` e `restaurar.py`: contratos de integridade e restauracao dos
+  projetos locais.
+- `vps.py`: Camada 2 — busca, verifica e cataloga dumps do VPS por SSH via um
+  agente restrito no servidor (`listar`/`enviar`/`apagar`/`estado`); nunca
+  dispara `pg_dump` remoto nem toca em container de producao.
 - `docs/historico/`: contexto antigo; nao e documentacao operacional.
 
 Confirme o comportamento no codigo antes de alterar documentacao. Pedido atual
@@ -34,8 +41,8 @@ estiver ausente ou invalido, diagnostique e proponha uma instalacao reproduzivel
 
 ## Invariantes de seguranca e recuperacao
 
-Qualquer mudanca em `motor.py`, `restaurar.py`, `banco.py` ou `projetos.py`
-preserva estes contratos:
+Qualquer mudanca em `motor.py`, `restaurar.py`, `banco.py`, `projetos.py` ou
+`vps.py` preserva estes contratos:
 
 1. Artefatos nascem em diretorio temporario e so recebem o nome final por troca
    atomica depois de verificados.
