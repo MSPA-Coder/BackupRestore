@@ -23,7 +23,7 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, url
 import banco
 import motor
 import restaurar as restauracao
-from configuracao import raiz_backup, raiz_permitida
+from configuracao import alvo_vps, raiz_backup, raiz_permitida
 from projetos import CONTAINER_SANDBOX, PROJETOS, RAIZ_PROJETOS, por_slug
 
 USUARIO_SANDBOX = "sandbox"
@@ -177,6 +177,8 @@ def configuracoes():
         raiz_permitida=raiz_permitida(),
         raiz_projetos=RAIZ_PROJETOS,
         espaco_livre=motor.espaco_livre(),
+        # Só leitura: quem escreve é `cli.py configurar-vps` (D7).
+        vps=alvo_vps(),
     )
 
 

@@ -6,5 +6,11 @@
 {% block conteudo %}
 <div class="page-heading"><div><p class="eyebrow">GOVERNANÇA DE ARMAZENAMENTO</p><h1>Retenção</h1><p class="muted">A limpeza ocorre depois de um novo artefato válido e preserva itens fixados.</p></div></div>
 <div class="settings-note policy-note"><strong>Regra de proteção</strong><p>O último artefato íntegro de cada tipo nunca é removido automaticamente.</p></div>
-<section class="retention-grid">{% for p in projetos %}<article class="retention-card"><div class="card-topline"><span class="project-initials">{{ p.nome[:2] | upper }}</span><span class="tag">Ativo</span></div><h2>{{ p.nome }}</h2><p class="muted">Limite configurado: {{ p.retencao }} por tipo.</p><div class="retention-counts">{% for tipo in ['banco', 'codigo'] %}<div><span>{{ tipo | capitalize }}</span><strong>{{ contagens[p.slug][tipo] }} <small>/ {{ p.retencao }}</small></strong></div>{% endfor %}</div><a class="open-link" href="{{ url_for('projeto', slug=p.slug) }}">Ver artefatos →</a></article>{% endfor %}</section>
+{% macro cartao(p) %}<article class="retention-card"><div class="card-topline"><span class="project-initials">{{ p.nome[:2] | upper }}</span><span class="tag">Ativo</span></div><h2>{{ p.nome }}</h2><p class="muted">Limite configurado: {{ p.retencao }} por tipo.</p><div class="retention-counts">{% for tipo in p.tipos %}<div><span>{{ tipo | capitalize }}</span><strong>{{ contagens[p.slug][tipo] }} <small>/ {{ p.retencao }}</small></strong></div>{% endfor %}</div><a class="open-link" href="{{ url_for('projeto', slug=p.slug) }}">Ver artefatos →</a></article>{% endmacro %}
+
+<h2 class="group-heading">Neste computador</h2>
+<section class="retention-grid">{% for p in projetos if p.ambiente == 'local' %}{{ cartao(p) }}{% endfor %}</section>
+
+<h2 class="group-heading">Produção (VPS)</h2>
+<section class="retention-grid">{% for p in projetos if p.ambiente == 'vps' %}{{ cartao(p) }}{% endfor %}</section>
 {% endblock %}

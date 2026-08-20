@@ -28,15 +28,15 @@
   </article>
 </div>
 
-<section class="panel" id="projetos">
-  <div class="panel-title">
-    <div><h2>Projetos</h2><p>Último artefato válido de cada tipo.</p></div>
-  </div>
+{% macro tabela(grupo) %}
   <div class="table">
     <div class="project-row"><span>Projeto</span><span>Banco</span><span>Código</span><span>Estado</span></div>
-    {% for p in projetos %}
+    {% for p in grupo %}
       {% set r = resumos[p.slug] %}
       {% set ultima = r.ultima_execucao %}
+      {# "codigo" não existe para todo projeto (ver D4/D5) — completo é ter o
+         que o projeto realmente produz, não banco+código incondicionalmente. #}
+      {% set completo = r.banco and ('codigo' not in p.tipos or r.codigo) %}
       <div class="project-row">
         <div>
           <div class="project-name">{{ p.nome }}</div>
@@ -46,7 +46,7 @@
           <div>
             <span class="cell-label">{{ tipo | capitalize }}</span>
             <span class="cell-value">
-              {% if r[tipo] %}{{ r[tipo].criado_em | momento }}{% else %}—{% endif %}
+              {% if tipo not in p.tipos %}não se aplica{% elif r[tipo] %}{{ r[tipo].criado_em | momento }}{% else %}—{% endif %}
             </span>
           </div>
         {% endfor %}
@@ -55,7 +55,7 @@
             <span class="tag fail">Falhou</span>
           {% elif ultima and ultima.situacao in ('fila', 'rodando') %}
             <span class="tag warn">Rodando</span>
-          {% elif r.banco and r.codigo %}
+          {% elif completo %}
             <span class="tag">Íntegro</span>
           {% else %}
             <span class="tag warn">Incompleto</span>
@@ -65,5 +65,19 @@
       </div>
     {% endfor %}
   </div>
+{% endmacro %}
+
+<section class="panel" id="projetos">
+  <div class="panel-title">
+    <div><h2>Neste computador</h2><p>Último artefato válido de cada tipo.</p></div>
+  </div>
+  {{ tabela(projetos | selectattr('ambiente', 'equalto', 'local') | list) }}
+</section>
+
+<section class="panel" id="projetos-vps">
+  <div class="panel-title">
+    <div><h2>Produção (VPS)</h2><p>Buscado e verificado pela Camada 2 — nunca produzido direto daqui.</p></div>
+  </div>
+  {{ tabela(projetos | selectattr('ambiente', 'equalto', 'vps') | list) }}
 </section>
 {% endblock %}
