@@ -158,7 +158,6 @@ class BuscarECatalogarTests(unittest.TestCase):
                 patch.object(banco, "registrar_evento"),
             ):
                 ok = vps._buscar_e_catalogar(PROJETO_VPS, ALVO, dump, execucao_id=42)
-            # codeql[py/path-injection]  -- ver NOTA SOBRE PATH-INJECTION em vps.py
             caminho_final = configuracao.caminho_sob_raiz("projects", PROJETO_VPS.slug, "banco", nome)
 
             self.assertTrue(ok)
@@ -192,7 +191,6 @@ class BuscarECatalogarTests(unittest.TestCase):
                 patch.object(banco, "registrar_evento") as evento,
             ):
                 ok = vps._buscar_e_catalogar(PROJETO_VPS, ALVO, dump, execucao_id=42)
-            # codeql[py/path-injection]  -- ver NOTA SOBRE PATH-INJECTION em vps.py
             caminho_final = configuracao.caminho_sob_raiz(
                 "projects", PROJETO_VPS.slug, "banco", dump.arquivo
             )
@@ -226,7 +224,6 @@ class BuscarECatalogarTests(unittest.TestCase):
                 patch.object(banco, "registrar_evento") as evento,
             ):
                 ok = vps._buscar_e_catalogar(PROJETO_VPS, ALVO, dump, execucao_id=42)
-            # codeql[py/path-injection]  -- ver NOTA SOBRE PATH-INJECTION em vps.py
             caminho_final = configuracao.caminho_sob_raiz(
                 "projects", PROJETO_VPS.slug, "banco", dump.arquivo
             )
@@ -285,7 +282,6 @@ class SincronizarProjetoTests(unittest.TestCase):
             raise AssertionError(f"não deveria buscar — o dump já existe local: {comando!r}")
 
         with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
-            # codeql[py/path-injection]  -- ver NOTA SOBRE PATH-INJECTION em vps.py
             caminho = configuracao.caminho_sob_raiz("projects", PROJETO_VPS.slug, "banco", nome)
             os.makedirs(os.path.dirname(caminho), exist_ok=True)
             Path(caminho).write_bytes(b"ja-esta-aqui")

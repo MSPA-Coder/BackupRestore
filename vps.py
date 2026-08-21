@@ -43,11 +43,12 @@ TEMPO_LIMITE_ENVIO = 600
 # NOTA SOBRE PATH-INJECTION
 #
 # O nome de arquivo dos dumps nasce da saída de um comando SSH (o agente no
-# VPS), então o CodeQL o trata como entrada não confiável e marca
-# `py/path-injection` em cada ponto onde ele vira caminho. As marcações
-# `# codeql[py/path-injection]` espalhadas por este módulo silenciam esses
-# pontos — não porque o alerta seja irrelevante, mas porque há **duas**
-# barreiras independentes que o CodeQL não consegue seguir:
+# VPS), então o CodeQL o trata como entrada não confiável e abre
+# `py/path-injection` em cada ponto onde ele vira caminho — 10 alertas de
+# severidade alta, aqui e em `tests/test_vps.py`.
+#
+# São falsos positivos: há **duas** barreiras independentes que o CodeQL não
+# consegue seguir:
 #
 # 1. `_PADRAO_LISTAGEM`, abaixo: o nome só é aceito se casar
 #    `[a-z_]+_banco_\d{8}_\d{6}\.dump`. Não cabe barra, `..` nem ponto extra;
@@ -55,8 +56,13 @@ TEMPO_LIMITE_ENVIO = 600
 # 2. `configuracao.caminho_sob_raiz`, que resolve o caminho (seguindo links
 #    simbólicos) e recusa qualquer destino fora da raiz de backup.
 #
-# Mesma convenção já usada em `configuracao.py`. Se o formato do agente mudar
-# e o padrão afrouxar, estas marcações precisam ser reavaliadas junto.
+# Comentário `# codeql[...]` NÃO resolve: o code scanning do GitHub ignora
+# supressão por comentário (só a CLI do CodeQL a honra) — testado neste
+# repositório, o alerta continua. O caminho é dispensar os alertas na
+# interface, como já foi feito para os de `configuracao.py`.
+#
+# Se o formato do agente mudar e `_PADRAO_LISTAGEM` afrouxar, a dispensa
+# precisa ser reavaliada: é o padrão que sustenta a primeira barreira.
 
 # Espelha o formato que `backup-agent.sh verbo_listar` imprime: uma linha por
 # dump, "<slug>/<arquivo> <bytes> <sha256-ou-sem-hash>".
@@ -232,7 +238,6 @@ def sincronizar_projeto(projeto: Projeto, execucao_id: int | None = None) -> Res
                 )
                 continue
 
-            # codeql[py/path-injection]  -- ver NOTA SOBRE PATH-INJECTION no topo
             final = caminho_sob_raiz("projects", projeto.slug, "banco", dump.arquivo)
             if os.path.exists(final):
                 resultado.ja_existentes += 1
@@ -293,7 +298,6 @@ def _buscar_e_catalogar(
         tamanho = os.path.getsize(tmp)
         duracao = int((time.monotonic() - inicio) * 1000)
         criado_em = _criado_em_do_carimbo(dump.carimbo)
-        # codeql[py/path-injection]  -- ver NOTA SOBRE PATH-INJECTION no topo
         final = caminho_sob_raiz("projects", projeto.slug, "banco", dump.arquivo)
         motor._pasta_destino(projeto, "banco")
         motor._promover(
@@ -323,7 +327,5 @@ def _buscar_e_catalogar(
     finally:
         # Sobra de tentativa falha (ou o `.tmp` já promovido, que simplesmente
         # não existe mais neste caminho) não fica ocupando espaço.
-        # codeql[py/path-injection]  -- ver NOTA SOBRE PATH-INJECTION no topo
         if os.path.exists(tmp):
-            # codeql[py/path-injection]  -- ver NOTA SOBRE PATH-INJECTION no topo
             os.remove(tmp)
