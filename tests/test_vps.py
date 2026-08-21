@@ -332,3 +332,47 @@ class SincronizarProjetoTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestArgumentoParaOShellRemoto(unittest.TestCase):
+    """O `ssh` entrega a string ao shell do outro lado — o escape mora aqui.
+
+    O ponto sensível não é escapar: é escapar **sem mudar o que vai na linha**
+    para os nomes legítimos. O agente do VPS quebra `SSH_ORIGINAL_COMMAND` com
+    `read -r -a`, que separa em palavras mas não remove aspas; se o escape
+    aspasse um nome válido, o agente receberia `'x.dump'` com as aspas
+    literais e recusaria todo dump.
+    """
+
+    def test_nome_legitimo_atravessa_sem_alteracao(self):
+        for nome in (
+            "mega_sena/mega_sena_banco_20260820_031500.dump",
+            "conforto_termico/conforto_termico_banco_20260101_000000.dump",
+            "controle_renda_variavel/controle_renda_variavel_banco_20261231_235959.dump",
+        ):
+            with self.subTest(nome=nome):
+                self.assertEqual(vps._argumento(nome), nome)
+
+    def test_todo_nome_aceito_pelo_padrao_atravessa_sem_alteracao(self):
+        # Amarra o escape ao formato que `_PADRAO_LISTAGEM` aceita: enquanto os
+        # dois combinarem, o escape é identidade e o agente nunca vê aspas.
+        linha = "x_y/x_y_banco_20260820_031500.dump 123 " + "a" * 64
+        m = vps._PADRAO_LISTAGEM.match(linha)
+        self.assertIsNotNone(m)
+        caminho = f"{m['slug']}/{m['arquivo']}"
+        self.assertEqual(vps._argumento(caminho), caminho)
+
+    def test_metacaractere_de_shell_vira_palavra_literal(self):
+        # Nome que só existiria se o servidor tivesse sido comprometido: o
+        # `;` não pode encerrar o comando do lado de lá.
+        sujo = "mega_sena/x.dump; rm -rf /"
+        escapado = vps._argumento(sujo)
+        self.assertNotEqual(escapado, sujo)
+        self.assertTrue(escapado.startswith("'"))
+        self.assertTrue(escapado.endswith("'"))
+
+    def test_aspa_simples_no_nome_nao_escapa_do_escape(self):
+        escapado = vps._argumento("a'; rm -rf /; echo '")
+        # Reabrir a string com uma aspa própria é o truque clássico; o
+        # `shlex.quote` fecha, escapa a aspa e reabre.
+        self.assertNotIn("'; rm", escapado.replace("'\"'\"'", ""))
