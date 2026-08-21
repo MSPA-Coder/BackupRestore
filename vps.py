@@ -49,16 +49,23 @@ TEMPO_LIMITE_ENVIO = 600
 # `py/path-injection` aqui e em `tests/test_vps.py` (10, severidade alta) e
 # `py/command-line-injection` em `motor.py`, no `subprocess.run` (1, crítico).
 #
-# O `py/command-line-injection` deixou de existir de fato: `_argumento`
-# (abaixo) passa o nome por `shlex.quote` antes de ele entrar na linha do
-# `ssh`. Não era estritamente necessário — as barreiras abaixo já seguravam —,
-# mas é a correção certa por si só: o `ssh` entrega a string a um shell
-# remoto, e é o único ponto deste projeto onde texto de fora encosta em
-# contexto de shell. Também troca "um humano analisou e concluiu que está ok"
-# por algo que a ferramenta confere sozinha a cada análise.
+# `_argumento` (abaixo) passa o nome por `shlex.quote` antes de ele entrar na
+# linha do `ssh`. É a correção certa por si só — o `ssh` entrega a string a um
+# shell remoto, e é o único ponto deste projeto onde texto de fora encosta em
+# contexto de shell —, mas **não silencia o alerta**, e vale registrar por quê
+# para ninguém tentar de novo:
 #
-# Os `py/path-injection` continuam dispensados como falso positivo. O que
-# sustenta a dispensa — conferido no servidor, não deduzido da documentação:
+# O CodeQL não sabe que o `ssh` roda um shell do outro lado. O que ele
+# reclama é mais simples e anterior a isso: dado não confiável chegando a um
+# `subprocess.run`, ponto. Um argumento controlado por terceiro pode virar
+# *flag* do programa invocado (um nome começando com `-`), e para essa
+# preocupação `shlex.quote` não é barreira — ele escapa metacaractere de
+# shell, não injeção de argumento. Verificado empiricamente: o alerta foi
+# reaberto de propósito depois do `shlex.quote` entrar, a análise rodou no
+# commit com a correção, e ele continuou apontando `motor.py:88`.
+#
+# Então os 11 alertas seguem dispensados como falso positivo. O que sustenta
+# a dispensa — conferido no servidor, não deduzido da documentação:
 #
 # 1. O `subprocess.run` de `motor._rodar` recebe **lista**, sem `shell=True`:
 #    não há shell local interpretando nada.
