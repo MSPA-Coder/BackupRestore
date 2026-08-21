@@ -29,6 +29,7 @@ from __future__ import annotations
 import datetime
 import os
 import re
+import shlex
 import time
 from dataclasses import dataclass, field
 
@@ -48,8 +49,16 @@ TEMPO_LIMITE_ENVIO = 600
 # `py/path-injection` aqui e em `tests/test_vps.py` (10, severidade alta) e
 # `py/command-line-injection` em `motor.py`, no `subprocess.run` (1, crítico).
 #
-# Todos foram dispensados como falso positivo. O que sustenta a dispensa —
-# conferido no servidor, não deduzido da documentação:
+# O `py/command-line-injection` deixou de existir de fato: `_argumento`
+# (abaixo) passa o nome por `shlex.quote` antes de ele entrar na linha do
+# `ssh`. Não era estritamente necessário — as barreiras abaixo já seguravam —,
+# mas é a correção certa por si só: o `ssh` entrega a string a um shell
+# remoto, e é o único ponto deste projeto onde texto de fora encosta em
+# contexto de shell. Também troca "um humano analisou e concluiu que está ok"
+# por algo que a ferramenta confere sozinha a cada análise.
+#
+# Os `py/path-injection` continuam dispensados como falso positivo. O que
+# sustenta a dispensa — conferido no servidor, não deduzido da documentação:
 #
 # 1. O `subprocess.run` de `motor._rodar` recebe **lista**, sem `shell=True`:
 #    não há shell local interpretando nada.
@@ -76,9 +85,10 @@ TEMPO_LIMITE_ENVIO = 600
 # repositório, o alerta continua. O caminho é dispensar os alertas na
 # interface, como já foi feito para os de `configuracao.py`.
 #
-# O que invalidaria estas dispensas, e precisa disparar reavaliação: afrouxar
-# `_PADRAO_LISTAGEM`, tirar o `command=` do `authorized_keys`, ou o agente
-# passar a avaliar `SSH_ORIGINAL_COMMAND` em vez de só quebrá-lo em palavras.
+# O que invalidaria as dispensas restantes, e precisa disparar reavaliação:
+# afrouxar `_PADRAO_LISTAGEM`, tirar o `command=` do `authorized_keys`, ou o
+# agente passar a avaliar `SSH_ORIGINAL_COMMAND` em vez de só quebrá-lo em
+# palavras.
 
 # Espelha o formato que `backup-agent.sh verbo_listar` imprime: uma linha por
 # dump, "<slug>/<arquivo> <bytes> <sha256-ou-sem-hash>".
@@ -115,6 +125,22 @@ class ResultadoSincronizacao:
 # --------------------------------------------------------------------------
 # O agente, por SSH
 # --------------------------------------------------------------------------
+
+
+def _argumento(caminho_remoto: str) -> str:
+    """Escapa o argumento para o shell do outro lado do SSH.
+
+    O `ssh` entrega a string ao shell remoto — é o único ponto deste projeto
+    onde texto vindo de fora encosta num contexto de shell, e por isso o
+    escape é feito aqui em vez de se confiar só nas barreiras de fora.
+
+    Para todo nome legítimo isto é uma função identidade: `shlex.quote` só
+    aspa quando aparece caractere fora de `[a-zA-Z0-9_@%+=:,./-]`, e o formato
+    aceito por `_PADRAO_LISTAGEM` cabe inteiro nesse conjunto. Um nome
+    malformado vira uma palavra literal e o agente recusa por verbo/argumento
+    inválido — em vez de o shell remoto interpretar qualquer coisa.
+    """
+    return shlex.quote(caminho_remoto)
 
 
 def _ssh(alvo: dict[str, str], comando: str, *, saida_arquivo: str | None = None,
@@ -163,7 +189,7 @@ def listar_remoto(alvo: dict[str, str]) -> list[DumpRemoto]:
 
 
 def enviar_remoto(alvo: dict[str, str], dump: DumpRemoto, destino: str) -> None:
-    processo = _ssh(alvo, f"enviar {dump.caminho_remoto}",
+    processo = _ssh(alvo, f"enviar {_argumento(dump.caminho_remoto)}",
                      saida_arquivo=destino, tempo_limite=TEMPO_LIMITE_ENVIO)
     if processo.returncode != 0:
         raise FalhaDeSincronizacao(f"enviar {dump.caminho_remoto} falhou: {motor._erro(processo)}")
@@ -172,7 +198,7 @@ def enviar_remoto(alvo: dict[str, str], dump: DumpRemoto, destino: str) -> None:
 def _apagar_remoto(alvo: dict[str, str], dump: DumpRemoto) -> str:
     """Pede a remoção no servidor. Recusa por ser o mais recente é esperada
     (D8) — quem decide é o servidor, não este cliente."""
-    processo = _ssh(alvo, f"apagar {dump.caminho_remoto}")
+    processo = _ssh(alvo, f"apagar {_argumento(dump.caminho_remoto)}")
     if processo.returncode == 0:
         return "apagado"
     if "é o dump mais recente" in motor._erro(processo):
