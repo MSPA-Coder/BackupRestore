@@ -40,20 +40,35 @@ from projetos import AMBIENTE_VPS, CONTAINER_SANDBOX, Projeto
 TEMPO_LIMITE_COMANDO = 60
 TEMPO_LIMITE_ENVIO = 600
 
-# NOTA SOBRE PATH-INJECTION
+# NOTA SOBRE OS ALERTAS DO CODEQL NESTE MÓDULO
 #
 # O nome de arquivo dos dumps nasce da saída de um comando SSH (o agente no
-# VPS), então o CodeQL o trata como entrada não confiável e abre
-# `py/path-injection` em cada ponto onde ele vira caminho — 10 alertas de
-# severidade alta, aqui e em `tests/test_vps.py`.
+# VPS), então o CodeQL o trata como entrada não confiável e abre alertas em
+# todo ponto onde ele vira caminho ou volta para uma linha de comando:
+# `py/path-injection` aqui e em `tests/test_vps.py` (10, severidade alta) e
+# `py/command-line-injection` em `motor.py`, no `subprocess.run` (1, crítico).
 #
-# São falsos positivos: há **duas** barreiras independentes que o CodeQL não
-# consegue seguir:
+# Todos foram dispensados como falso positivo. O que sustenta a dispensa —
+# conferido no servidor, não deduzido da documentação:
 #
-# 1. `_PADRAO_LISTAGEM`, abaixo: o nome só é aceito se casar
-#    `[a-z_]+_banco_\d{8}_\d{6}\.dump`. Não cabe barra, `..` nem ponto extra;
-#    uma linha fora do formato levanta `FalhaDeSincronizacao` e nada é lido.
-# 2. `configuracao.caminho_sob_raiz`, que resolve o caminho (seguindo links
+# 1. O `subprocess.run` de `motor._rodar` recebe **lista**, sem `shell=True`:
+#    não há shell local interpretando nada.
+# 2. A chave dedicada em `authorized_keys` do VPS está presa por
+#    `command="/home/ubuntu/backup-agent.sh"`, com `no-pty`,
+#    `no-port-forwarding`, `no-agent-forwarding` e `no-X11-forwarding`. A
+#    string que este módulo monta nunca roda como comando remoto: o sshd
+#    executa só o agente e deixa a intenção em `SSH_ORIGINAL_COMMAND`. O
+#    agente a quebra com `read -r -a` (divisão em palavras, sem `eval` e sem
+#    substituição), aceita quatro verbos e recusa o resto; o argumento passa
+#    por `resolver_dump`, que faz a própria checagem com `realpath`.
+#
+# E, para os caminhos locais, mais duas:
+#
+# 3. `_PADRAO_LISTAGEM`, abaixo: o nome só é aceito se casar
+#    `[a-z_]+_banco_\d{8}_\d{6}\.dump`. Não cabe barra, `..`, ponto extra
+#    nem metacaractere de shell; uma linha fora do formato levanta
+#    `FalhaDeSincronizacao` e nada é lido.
+# 4. `configuracao.caminho_sob_raiz`, que resolve o caminho (seguindo links
 #    simbólicos) e recusa qualquer destino fora da raiz de backup.
 #
 # Comentário `# codeql[...]` NÃO resolve: o code scanning do GitHub ignora
@@ -61,8 +76,9 @@ TEMPO_LIMITE_ENVIO = 600
 # repositório, o alerta continua. O caminho é dispensar os alertas na
 # interface, como já foi feito para os de `configuracao.py`.
 #
-# Se o formato do agente mudar e `_PADRAO_LISTAGEM` afrouxar, a dispensa
-# precisa ser reavaliada: é o padrão que sustenta a primeira barreira.
+# O que invalidaria estas dispensas, e precisa disparar reavaliação: afrouxar
+# `_PADRAO_LISTAGEM`, tirar o `command=` do `authorized_keys`, ou o agente
+# passar a avaliar `SSH_ORIGINAL_COMMAND` em vez de só quebrá-lo em palavras.
 
 # Espelha o formato que `backup-agent.sh verbo_listar` imprime: uma linha por
 # dump, "<slug>/<arquivo> <bytes> <sha256-ou-sem-hash>".
