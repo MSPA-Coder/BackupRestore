@@ -36,3 +36,20 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Compile Python sources
         run: python -m compileall -q .
+
+      # O Dependabot abre PR quando sai versão nova. Não é a mesma pergunta que
+      # "a versão que está instalada AGORA tem CVE conhecido?" — e essa segunda
+      # ninguém fazia em nenhum dos seis repositórios.
+      #
+      # Instalado aqui e não no `requirements.txt` de propósito: aquele arquivo
+      # é o que a ferramenta precisa para RODAR na máquina do mantenedor.
+      # Ferramenta de CI não tem por que ser instalada junto com ela.
+      #
+      # Reprova em qualquer achado. Vulnerabilidade sem correção publicada sai
+      # por `--ignore-vuln <ID>` com comentário dizendo por quê: cada exceção
+      # vira decisão explícita e datada, em vez de um vermelho permanente que
+      # se aprende a ignorar.
+      - name: Auditar dependências instaladas (CVE conhecido)
+        run: |
+          python -m pip install "pip-audit>=2.10,<3"
+          pip-audit --progress-spinner=off
