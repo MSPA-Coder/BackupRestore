@@ -1,7 +1,10 @@
 # BackupRestore
 
 Backup dos projetos locais e ensaio de restauração em sandbox: dump PostgreSQL
-e ZIP de código por projeto, com verificação de integridade.
+e ZIP de código por projeto, com verificação de integridade. Também busca,
+verifica e cataloga os dumps que o VPS de produção já produz sozinho
+(Camada 2 do backup de produção) — nunca dispara `pg_dump` remoto nem toca em
+contêiner de produção.
 
 Roda no host (Python >=3.13; Python 3.14 atualmente testado, com Flask). Não é containerizado de propósito: é a
 ferramenta que gerencia os contêineres dos outros projetos, e colocá-la dentro de
@@ -29,12 +32,27 @@ para parar.
 Pela linha de comando:
 
 ```bash
-python cli.py backup --todos          # o que o Agendador chama
+python cli.py backup --todos          # o que o Agendador chama (só os projetos locais)
+python cli.py sincronizar-vps --todos # Camada 2: busca, verifica e cataloga os dumps do VPS
 python cli.py listar                  # catálogo
 python cli.py verificar               # relê os arquivos e confere SHA-256
 python cli.py ensaio --projeto mega_sena   # restaura no sandbox e compara com a origem
 python web.py                         # interface em http://127.0.0.1:5401
 ```
+
+Os quatro projetos locais produzem o próprio backup (contêiner Docker). Os
+quatro projetos `_vps` não — a produção acontece sozinha no servidor
+(`_manutencao/vps/backup-db.sh`, systemd timer) e o `sincronizar-vps` só
+busca, verifica e cataloga o que já existe lá, pelo agente restrito
+(`_manutencao/vps/backup-agent.sh`). Configure o alvo uma vez com:
+
+```powershell
+python cli.py configurar-vps <host> --usuario ubuntu --chave 'C:\caminho\da\chave-dedicada'
+```
+
+O agente do servidor só sabe quatro verbos (`listar`, `enviar`, `apagar`,
+`estado`) — este cliente nunca dispara `pg_dump` remoto nem toca em contêiner
+de produção.
 
 > **Atenção ao interpretador.** `iniciar.bat` e a tarefa agendada usam o runtime
 > configurado no host porque o `PATH` pode apontar para o atalho da Microsoft
@@ -99,7 +117,14 @@ raiz é a escolhida em Configurações — ver seção anterior):
 Cada um com `.manifest.json` ao lado (SHA-256, tamanho, origem, e para código o
 `HEAD` e se havia trabalho não commitado).
 
-Total atual: **32 MB** para os quatro projetos, incluindo dumps de segurança.
+Total atual: **32 MB** para os quatro projetos locais, incluindo dumps de
+segurança.
+
+**Os quatro projetos `_vps` só têm `banco/*.dump`** — sem `codigo/`, porque o
+código de produção não é um artefato deste sistema (ver seção "Agendamento" e
+[RESTAURAR.md](RESTAURAR.md)). O `.manifest.json` desses dumps registra o
+servidor de origem em vez de um contêiner local, e o carimbo de tempo é
+sempre o momento em que o servidor capturou o dado — não o do download.
 
 ---
 
@@ -120,7 +145,9 @@ O que este projeto é, na prática. Estão em `motor.py` e `restaurar.py`.
 5. **Toda restauração começa por um dump de segurança** do destino, verificado.
    Se ele falhar, a restauração é abortada.
 6. **Restauração exige o nome do banco digitado**, e os contêineres reais são
-   recusados por lista — não há flag que libere.
+   recusados por par `(ambiente, contêiner)` — não há flag que libere. O par
+   existe porque os contêineres do VPS usam os mesmos nomes dos locais; uma
+   lista só de nomes os protegeria por coincidência, não por desenho.
 7. **SHA-256 gravado e reconferível** por `python cli.py verificar`.
 
 E a que valida as outras: **um artefato só serve se você já restaurou a partir
@@ -174,26 +201,47 @@ pip e GitHub Actions semanalmente, agrupando atualizações minor/patch.
 
 ## Agendamento
 
-O backup só vale se rodar sozinho. Registre a tarefa uma vez (PowerShell como
-administrador):
+O backup só vale se rodar sozinho. Registre as duas tarefas uma vez
+(PowerShell): a local, e a que busca do VPS meia hora depois — dando folga
+para o timer do servidor (03:00 America/Sao_Paulo) terminar de produzir o dia.
 
 ```powershell
-schtasks /create /tn "BackupRestore" /tr "\"%LOCALAPPDATA%\Python\bin\python.exe\" \"C:\Users\MSPA\Dropbox\Programacao\VSCodeProjects\BackupRestore\cli.py\" backup --todos" /sc daily /st 03:00
+schtasks /create /tn "BackupRestore" /tr '"C:\Users\MSPA\AppData\Local\Python\bin\python.exe" "C:\Users\MSPA\Dropbox\Programacao\VSCodeProjects\BackupRestore\cli.py" backup --todos' /sc daily /st 03:00
+schtasks /create /tn "BackupRestoreVPS" /tr '"C:\Users\MSPA\AppData\Local\Python\bin\python.exe" "C:\Users\MSPA\Dropbox\Programacao\VSCodeProjects\BackupRestore\cli.py" sincronizar-vps --todos' /sc daily /st 03:30
 ```
 
 Caminho completo do Python de propósito — o Agendador não roda no Git Bash, então
 `python` puro pegaria o atalho da Loja e a tarefa falharia em silêncio. Depois de
 criar, confira o resultado da primeira execução com `python cli.py listar`.
 
+**A tarefa do VPS precisa do sandbox de pé** (`docker compose -f
+compose.teste.yaml up -d`, uma vez — o script deixa o contêiner parado entre
+usos, e a sincronização o liga sozinha quando precisa). Sem ele,
+`sincronizar-vps` recusa com uma mensagem clara em vez de travar.
+
+**Se `sincronizar-vps` falhar com `Permission denied (publickey)` mesmo com a
+chave certa em `configuracao.local.json`**, o motivo quase sempre é a ACL do
+arquivo da chave: o cliente OpenSSH do Windows recusa uma chave privada legível
+por mais de um principal. Restrinja com:
+
+```powershell
+icacls "C:\caminho\da\chave-dedicada" /inheritance:r /grant:r "$env:USERDOMAIN\$env:USERNAME:R"
+```
+
+Uma chave criada por `ssh-keygen` num terminal Git Bash herda ACLs abertas da
+pasta — funciona rodando à mão nesse mesmo terminal, mas falha em silêncio
+quando o Agendador de Tarefas chama o `ssh.exe` real do Windows.
+
 ---
 
 ## Arquivos
 
 ```
-projetos.py     os 4 projetos e os contêineres protegidos
+projetos.py     os 8 projetos (4 locais + 4 de origem VPS) e os contêineres protegidos
 banco.py        catálogo SQLite (3 tabelas, sem ORM, sem migrações)
-motor.py        produção e verificação dos artefatos — o núcleo
+motor.py        produção e verificação dos artefatos locais — o núcleo
 restaurar.py    travas, dump de segurança e pg_restore
+vps.py          Camada 2: busca, verifica e cataloga os dumps que o VPS produziu sozinho
 cli.py          linha de comando
 web.py          interface Flask
 catalogo.sqlite3  fica fora da pasta de backup de propósito

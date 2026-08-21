@@ -143,7 +143,12 @@ def restaurar(
     """Restaura um dump do catálogo num destino que não seja um projeto real."""
 
     # Trava 1 — destino proibido. Antes de tudo, inclusive de ler o artefato.
-    if container_destino in CONTAINERS_PROTEGIDOS:
+    # A restauração só fala com o Docker local, nunca com o VPS por SSH — daqui
+    # o ambiente do destino é sempre "local". Comparar por par, não só pelo
+    # nome, é o que faz a trava valer por desenho: os contêineres do VPS usam
+    # os mesmos nomes dos daqui, e um conjunto só de nomes os protegeria por
+    # coincidência.
+    if ("local", container_destino) in CONTAINERS_PROTEGIDOS:
         raise RestauracaoRecusada(
             f"{container_destino} é o contêiner de um projeto real e não é destino "
             "aceito. Use o sandbox (compose.teste.yaml) ou siga o RESTAURAR.md à mão."
@@ -240,6 +245,16 @@ def restaurar(
 def comparar_com_origem(projeto: Projeto, container_destino: str, usuario_destino: str,
                         banco_destino: str) -> dict:
     """O ensaio: as mesmas tabelas, com as mesmas contagens, dos dois lados."""
+    if projeto.ambiente != "local":
+        # `projeto.container` é só um nome — para um projeto "vps" ele colide
+        # de propósito com o contêiner local do mesmo nome (ver projetos.py).
+        # Ler a "origem" por aqui compararia com o banco local errado. A
+        # origem VPS ainda não tem um caminho de leitura (Fase 6 do plano).
+        raise RuntimeError(
+            f"{projeto.slug}: comparação com a origem via contêiner local não vale "
+            f"para ambiente={projeto.ambiente!r} — o nome do contêiner colide com o "
+            "do projeto local"
+        )
     existe, rodando = motor.estado_container(projeto.container)
     if not existe:
         raise RuntimeError(f"contêiner de origem {projeto.container} não existe")

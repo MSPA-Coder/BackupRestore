@@ -28,6 +28,8 @@ main { min-width:0; }
 @keyframes fade { from { opacity:.5; transform:translateY(3px); } }
 .page-heading { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-bottom:28px; }
 .eyebrow { margin:0 0 7px; color:#537a69; font:600 10px var(--mono); letter-spacing:1.5px; }
+.group-heading { margin:28px 0 12px; color:#537a69; font:600 10px var(--mono); letter-spacing:1.5px; text-transform:uppercase; }
+.group-heading:first-child { margin-top:0; }
 .page-heading h1 { font-size:30px; letter-spacing:-1.3px; margin:0 0 7px; }
 .muted { color:var(--muted); font-size:14px; margin:0; }
 .path-text { font:11px var(--mono); }

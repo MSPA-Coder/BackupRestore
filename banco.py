@@ -165,9 +165,18 @@ def registrar_artefato(
     duracao_ms: int,
     execucao_id: int | None,
     finalidade: str = "regular",
+    criado_em: str | None = None,
 ) -> int:
     """Grava um artefato já verificado. Nada entra aqui como 'valido' sem ter
-    passado pela releitura em `motor.verificar_*`."""
+    passado pela releitura em `motor.verificar_*`.
+
+    ``criado_em`` normalmente é agora — o instante em que este host produziu o
+    artefato. Um artefato buscado do VPS (`vps.py`) passa o carimbo do
+    servidor: é quando o dado foi capturado lá, não quando chegou aqui, e é
+    isso que ordena a retenção corretamente depois de um PC que ficou dias
+    fora buscar vários de uma vez. ``validado_em`` continua sendo sempre agora
+    — o instante em que *este* host confirmou a integridade.
+    """
     with conectar() as conexao:
         cursor = conexao.execute(
             "INSERT INTO artefatos (projeto, tipo, finalidade, situacao, caminho_relativo,"
@@ -180,7 +189,7 @@ def registrar_artefato(
                 caminho_relativo,
                 bytes_,
                 sha256,
-                agora(),
+                criado_em or agora(),
                 agora(),
                 duracao_ms,
                 execucao_id,
