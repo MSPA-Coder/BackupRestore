@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import io
 import os
 import subprocess
 import tempfile
 import unittest
+from argparse import Namespace
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
 import banco
+import cli
 import configuracao
 import motor
 import vps
@@ -320,14 +323,84 @@ class SincronizarProjetoTests(unittest.TestCase):
                 patch.object(banco, "abrir_execucao", return_value=1),
                 patch.object(banco, "marcar_fase"),
                 patch.object(banco, "fechar_execucao") as fechar,
-                patch.object(banco, "registrar_evento"),
+                patch.object(banco, "registrar_evento") as evento,
             ):
                 resultado = vps.sincronizar_projeto(PROJETO_VPS)
 
         self.assertEqual(resultado.reprovados, 1)
         self.assertEqual(resultado.buscados, 0)
         self.assertEqual(resultado.mantidos, 0)
-        fechar.assert_called_once_with(1, "sucesso")
+        fechar.assert_called_once_with(
+            1,
+            "falha",
+            "Sincronização incompleta: 1 dump(s) remoto(s) reprovado(s).",
+        )
+        self.assertEqual(
+            [chamada.args[0] for chamada in evento.call_args_list],
+            ["sincronizacao.reprovado", "sincronizacao.falha"],
+        )
+
+    def test_mistura_sucesso_e_reprovacoes_preserva_contagens_e_fecha_uma_vez(self) -> None:
+        dumps = [
+            vps.DumpRemoto(
+                slug_servidor=PROJETO_VPS.slug_servidor,
+                arquivo=f"{PROJETO_VPS.slug_servidor}_banco_202608{dia:02d}_000000.dump",
+                caminho_remoto=f"{PROJETO_VPS.slug_servidor}/dump-{dia}",
+                bytes=10,
+                sha256="a" * 64,
+                carimbo=f"202608{dia:02d}_000000",
+            )
+            for dia in (18, 19, 20)
+        ]
+
+        with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
+            with (
+                patch.object(vps, "_alvo_configurado", return_value=ALVO),
+                patch.object(vps, "listar_remoto", return_value=dumps),
+                patch.object(vps, "_buscar_e_catalogar", side_effect=[True, False, False]),
+                patch.object(vps, "_apagar_remoto", return_value="mantido") as apagar,
+                patch.object(banco, "abrir_execucao", return_value=7),
+                patch.object(banco, "marcar_fase"),
+                patch.object(banco, "fechar_execucao") as fechar,
+                patch.object(banco, "registrar_evento") as evento,
+            ):
+                resultado = vps.sincronizar_projeto(PROJETO_VPS)
+
+        self.assertEqual(resultado.buscados, 1)
+        self.assertEqual(resultado.reprovados, 2)
+        self.assertEqual(resultado.mantidos, 1)
+        apagar.assert_called_once_with(ALVO, dumps[0])
+        fechar.assert_called_once_with(
+            7,
+            "falha",
+            "Sincronização incompleta: 2 dump(s) remoto(s) reprovado(s).",
+        )
+        eventos_falha = [
+            chamada for chamada in evento.call_args_list
+            if chamada.args[0] == "sincronizacao.falha"
+        ]
+        self.assertEqual(len(eventos_falha), 1)
+
+
+class SincronizarVpsCliTests(unittest.TestCase):
+    def test_todos_retorna_um_se_um_projeto_tiver_dump_reprovado(self) -> None:
+        projetos = [p for p in PROJETOS if p.ambiente == "vps"][:2]
+        resultados = [
+            vps.ResultadoSincronizacao(buscados=1),
+            vps.ResultadoSincronizacao(buscados=1, reprovados=2),
+        ]
+
+        with (
+            patch.object(cli, "PROJETOS", projetos),
+            patch.object(vps, "sincronizar_projeto", side_effect=resultados),
+            patch("sys.stdout", new_callable=io.StringIO),
+            patch("sys.stderr", new_callable=io.StringIO) as stderr,
+        ):
+            codigo = cli.comando_sincronizar_vps(Namespace(todos=True, projeto=None))
+
+        self.assertEqual(codigo, 1)
+        self.assertIn("1 projeto(s) falharam", stderr.getvalue())
+        self.assertIn("2 dump(s) remoto(s) reprovado(s)", stderr.getvalue())
 
 
 if __name__ == "__main__":

@@ -127,6 +127,13 @@ def comando_sincronizar_vps(args: argparse.Namespace) -> int:
                   f"mantidos (mais recente): {resultado.mantidos}")
             for aviso in resultado.avisos:
                 print(f"   AVISO: {aviso}", file=sys.stderr)
+            if resultado.reprovados:
+                falhas += 1
+                print(
+                    f"   FALHOU: sincronização incompleta; {resultado.reprovados} "
+                    "dump(s) remoto(s) reprovado(s).",
+                    file=sys.stderr,
+                )
         except Exception as erro:
             falhas += 1
             print(f"   FALHOU: {erro}", file=sys.stderr)

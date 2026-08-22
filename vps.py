@@ -309,14 +309,29 @@ def sincronizar_projeto(projeto: Projeto, execucao_id: int | None = None) -> Res
                 banco.registrar_evento("sincronizacao.aviso", mensagem, projeto=projeto.slug,
                                        execucao_id=execucao_id, severidade="aviso")
 
-        banco.fechar_execucao(execucao_id, "sucesso")
-        banco.registrar_evento(
-            "sincronizacao.sucesso",
+        resumo = (
             f"{resultado.buscados} buscado(s), {resultado.ja_existentes} já existia(m), "
             f"{resultado.reprovados} reprovado(s), {resultado.apagados} apagado(s) do "
-            f"servidor, {resultado.mantidos} mantido(s) (mais recente)",
-            projeto=projeto.slug, execucao_id=execucao_id,
+            f"servidor, {resultado.mantidos} mantido(s) (mais recente)"
         )
+        if resultado.reprovados:
+            erro = (
+                f"Sincronização incompleta: {resultado.reprovados} dump(s) remoto(s) "
+                "reprovado(s)."
+            )
+            banco.fechar_execucao(execucao_id, "falha", erro)
+            banco.registrar_evento(
+                "sincronizacao.falha",
+                f"{erro} {resumo}",
+                projeto=projeto.slug, execucao_id=execucao_id, severidade="erro",
+            )
+        else:
+            banco.fechar_execucao(execucao_id, "sucesso")
+            banco.registrar_evento(
+                "sincronizacao.sucesso",
+                resumo,
+                projeto=projeto.slug, execucao_id=execucao_id,
+            )
         return resultado
     except Exception as erro:
         banco.fechar_execucao(execucao_id, "falha", str(erro))
