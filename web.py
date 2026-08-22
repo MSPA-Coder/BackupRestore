@@ -177,7 +177,7 @@ def configuracoes():
         raiz_permitida=raiz_permitida(),
         raiz_projetos=RAIZ_PROJETOS,
         espaco_livre=motor.espaco_livre(),
-        # Só leitura: quem escreve é `cli.py configurar-vps` (D7).
+        # Só leitura: quem escreve é `cli.py configurar-vps`.
         vps=alvo_vps(),
     )
 
@@ -272,8 +272,7 @@ def executar_restauracao(artefato_id: int):
     destino = f"ensaio_{alvo.slug}"
     try:
         # O destino é fixo e descartável. A interface não oferece escolha de
-        # contêiner: `restaurar.py` recusaria os reais de qualquer forma, mas
-        # nem apresentar a opção é melhor que apresentar e barrar.
+        # contêiner, e `restaurar.py` aceita exclusivamente este nome.
         resultado = restauracao.restaurar(
             artefato_id,
             container_destino=CONTAINER_SANDBOX,

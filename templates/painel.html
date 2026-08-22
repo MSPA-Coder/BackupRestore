@@ -34,7 +34,7 @@
     {% for p in grupo %}
       {% set r = resumos[p.slug] %}
       {% set ultima = r.ultima_execucao %}
-      {# "codigo" não existe para todo projeto (ver D4/D5) — completo é ter o
+      {# "codigo" não existe para todo projeto — completo é ter o
          que o projeto realmente produz, não banco+código incondicionalmente. #}
       {% set completo = r.banco and ('codigo' not in p.tipos or r.codigo) %}
       <div class="project-row">

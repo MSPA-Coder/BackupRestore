@@ -17,7 +17,6 @@ Docker.
 - `vps.py`: Camada 2 — busca, verifica e cataloga dumps do VPS por SSH via um
   agente restrito no servidor (`listar`/`enviar`/`apagar`/`estado`); nunca
   dispara `pg_dump` remoto nem toca em container de producao.
-- `docs/historico/`: contexto antigo; nao e documentacao operacional.
 
 Confirme o comportamento no codigo antes de alterar documentacao. Pedido atual
 do mantenedor e requisitos de seguranca e preservacao de dados prevalecem sobre
@@ -28,7 +27,9 @@ decisoes historicas.
 A aplicacao usa Python no host como excecao deliberada ao padrao container-first.
 O interpretador deve satisfazer a versao minima declarada pelo projeto e importar
 as dependencias instaladas; nao dependa de uma instalacao global escolhida por
-acidente pelo `PATH`.
+acidente pelo `PATH`. `iniciar.bat` seleciona, nesta ordem,
+`BACKUPRESTORE_PYTHON`, `%LOCALAPPDATA%\Python\bin\python.exe` e `python` do
+`PATH`; nao introduza fallback para diretorio interno de versao especifica.
 
 Versoes documentadas como "testadas" sao um estado operacional atual, nao um
 congelamento. Declare separadamente a versao minima suportada, a versao testada e
@@ -51,8 +52,8 @@ Qualquer mudanca em `motor.py`, `restaurar.py`, `banco.py`, `projetos.py` ou
    ultimo artefato valido de um tipo.
 4. O estado original do container e restaurado em `finally`, inclusive em falha.
 5. Restauracao comeca por dump de seguranca verificado do destino.
-6. O nome do banco precisa ser confirmado e containers reais continuam
-   bloqueados sem flag de bypass.
+6. O nome do banco precisa ser confirmado e somente `backuprestore-sandbox`
+   pode ser destino da restauração automática, sem flag de bypass.
 7. SHA-256, tamanho e origem permanecem verificaveis pelo catalogo.
 
 A raiz de backup e seu limite permitido sao definidos somente pelo operador no
@@ -98,5 +99,6 @@ proteger selecao de alvo, bloqueios, retencao e falhas antes do ensaio real.
 - Mudancas de formato do catalogo ou artefato precisam de compatibilidade,
   migracao ou procedimento de rollback explicito.
 - Atualize README/RESTAURAR quando operacao ou recuperacao mudarem.
-- Historico de tentativas vai para `docs/historico/`, nao para instrucoes vivas.
+- Não adicione diários de implementação ou planos concluídos às instruções vivas;
+  o histórico de mudanças já permanece no Git.
 - Ao concluir, informe comandos executados, resultados e validacoes omitidas.

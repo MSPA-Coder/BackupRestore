@@ -1,9 +1,8 @@
 """O núcleo: produz os dois artefatos (banco, código) e não confia em nenhum
 deles sem reler. Um terceiro artefato, `config` (zip de `.env`/`.certs`/
-`.secrets`), existiu até o commit inicial e foi removido conscientemente do
-escopo antes do Release V1.0 — os segredos são regeneráveis, e um backup
-deste sistema, hoje, não reconstrói sozinho um projeto do zero. Não reintroduza
-esse artefato sem decisão explícita do mantenedor.
+`.secrets`), não faz parte do escopo: segredos exigem proteção independente, e
+um backup deste sistema não reconstrói sozinho um projeto do zero. Não
+reintroduza esse artefato sem decisão explícita do mantenedor.
 
 As sete regras que este módulo implementa, e por que cada uma existe:
 
@@ -12,8 +11,7 @@ As sete regras que este módulo implementa, e por que cada uma existe:
    um arquivo truncado com cara de dump bom.
 2. Verificar antes de confiar — código de saída zero não prova nada. Todo
    artefato é lido de volta (`pg_restore --list`, `testzip`) antes de ser
-   aceito. Foi medido: um dump truncado sai com exit 1 e um com bytes trocados
-   derruba o pg_restore — os dois são reprovados.
+   aceito.
 3. Nunca apagar antes de ter o substituto — a retenção roda depois de tudo
    verificado, e nunca remove o último artefato válido de um tipo.
 4. Devolver o contêiner ao estado em que estava — em `finally`, inclusive quando
@@ -390,12 +388,12 @@ def fazer_backup(
         # contêiner do projeto local por coincidência (ver projetos.py) — sem
         # esta trava, isto dispararia pg_dump no contêiner local e gravaria o
         # resultado no catálogo com o rótulo errado. Os artefatos desse
-        # ambiente chegam por outro caminho (busca ao servidor, Fase 4 do
-        # plano) que ainda não existe. Fecha a execução como as demais travas
+        # ambiente chegam por outro caminho (sincronização com o servidor).
+        # Fecha a execução como as demais travas
         # pré-`try` desta função — senão ela fica presa em "fila" para sempre.
         erro = (
             f"{projeto.slug}: ambiente {projeto.ambiente!r} não produz backup por "
-            "contêiner — essa via ainda não existe"
+            "contêiner — use a sincronização própria desse ambiente"
         )
         banco.registrar_evento("backup.falha", erro, projeto=projeto.slug,
                                execucao_id=execucao_id, severidade="erro")

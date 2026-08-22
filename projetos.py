@@ -11,8 +11,32 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
-RAIZ_PROJETOS = r"C:\Users\MSPA\Dropbox\Programacao\VSCodeProjects"
+VARIAVEL_RAIZ_PROJETOS = "BACKUPRESTORE_RAIZ_PROJETOS"
+
+
+def resolver_raiz_projetos(
+    valor: str | None = None, *, pasta_aplicacao: str | os.PathLike[str] | None = None
+) -> str:
+    """Resolve a pasta que contém os projetos locais.
+
+    O override é útil quando os checkouts não são irmãos deste repositório. Sem
+    ele, a raiz é o diretório pai do próprio BackupRestore.
+    """
+    informado = valor if valor is not None else os.environ.get(VARIAVEL_RAIZ_PROJETOS)
+    if informado is not None:
+        texto = os.path.expanduser(os.path.expandvars(str(informado).strip()))
+        if not texto:
+            raise ValueError(f"{VARIAVEL_RAIZ_PROJETOS} não pode ser vazia")
+        return str(Path(texto).resolve(strict=False))
+    aplicacao = Path(pasta_aplicacao or __file__).resolve(strict=False)
+    if pasta_aplicacao is None:
+        aplicacao = aplicacao.parent
+    return str(aplicacao.parent.resolve(strict=False))
+
+
+RAIZ_PROJETOS = resolver_raiz_projetos()
 
 # O catálogo SQLite fica fora da pasta de backup de propósito: copiar os
 # artefatos para outro lugar não deve levar junto o índice do que existe.
@@ -31,8 +55,7 @@ AMBIENTE_LOCAL = "local"
 AMBIENTE_VPS = "vps"
 
 # Retenção do catálogo local para artefatos de origem VPS. Acompanha os 14
-# dias que o servidor já guarda por conta própria (Camada 1) — ver decisão D9
-# em PLANO_BACKUPRESTORE_VPS.md.
+# dias que o servidor guarda por conta própria.
 RETENCAO_VPS = 14
 
 
@@ -105,13 +128,13 @@ PROJETOS: tuple[Projeto, ...] = (
         usuario="investimentos",
         banco="investimentos",
     ),
-    # Projetos de produção no VPS (Camada 2 do plano de backup do VPS). Mesmos
+    # Projetos de produção no VPS, sincronizados pela Camada 2. Mesmos
     # apelidos de contêiner, usuário e banco dos originais — são os nomes reais
     # do lado de lá — mas em `ambiente="vps"`, sem pasta local e sem tipo
-    # "codigo": o código do VPS é espelho do `main` (ver D4), não um artefato
+    # "codigo": o código do VPS é espelho do `main`, não um artefato
     # próprio. `motor.fazer_backup` recusa qualquer projeto que não seja
     # `AMBIENTE_LOCAL` — a produção por contêiner não existe para eles; os
-    # artefatos chegam pela busca ao servidor (Fase 4, ainda não implementada).
+    # artefatos chegam pela sincronização com o servidor implementada em vps.py.
     Projeto(
         slug="conforto_termico_vps",
         nome="Conforto Térmico (VPS)",
@@ -158,12 +181,8 @@ PROJETOS: tuple[Projeto, ...] = (
     ),
 )
 
-# Guarda-chuva da regra 6. Restaurar é a única operação destrutiva do sistema, e
-# o erro que custa caro é acertar o arquivo e errar o destino. Chave é o par
-# (ambiente, contêiner), não só o nome: os contêineres do VPS têm nomes
-# idênticos aos daqui, então um conjunto só de nomes protegeria o VPS por
-# coincidência, não por desenho. `restaurar.py` só executa contra o Docker
-# local, então a trava real compara sempre contra `("local", <nome>)`.
+# Inventário dos contêineres associados aos projetos. A restauração automática
+# não depende desta lista: sua trava é a allowlist exata de CONTAINER_SANDBOX.
 CONTAINERS_PROTEGIDOS = frozenset((p.ambiente, p.container) for p in PROJETOS)
 
 

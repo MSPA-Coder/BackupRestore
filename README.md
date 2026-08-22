@@ -6,9 +6,9 @@ verifica e cataloga os dumps que o VPS de produção já produz sozinho
 (Camada 2 do backup de produção) — nunca dispara `pg_dump` remoto nem toca em
 contêiner de produção.
 
-Roda no host (Python >=3.13; Python 3.14 atualmente testado, com Flask). Não é containerizado de propósito: é a
-ferramenta que gerencia os contêineres dos outros projetos, e colocá-la dentro de
-um exigiria montar o socket do Docker.
+Roda no host (Python >=3.13; Python 3.14 atualmente testado, com Flask). Não é
+containerizado de propósito: é a ferramenta que gerencia os contêineres dos
+outros projetos, e colocá-la dentro de um exigiria montar o socket do Docker.
 
 A versão testada não é um congelamento: a compatibilidade mínima e a atualização
 do runtime serão declaradas de forma reproduzível, e cada evolução precisa passar
@@ -54,11 +54,12 @@ O agente do servidor só sabe quatro verbos (`listar`, `enviar`, `apagar`,
 `estado`) — este cliente nunca dispara `pg_dump` remoto nem toca em contêiner
 de produção.
 
-> **Atenção ao interpretador.** `iniciar.bat` e a tarefa agendada usam o runtime
-> configurado no host porque o `PATH` pode apontar para o atalho da Microsoft
-> Store ou para uma instalação sem Flask. Confirme o executável com
-> `python --version` e `python -c "import flask"`; não trate um caminho interno
-> de uma versão específica como contrato permanente.
+> **Atenção ao interpretador.** `iniciar.bat` usa primeiro o executável indicado
+> por `BACKUPRESTORE_PYTHON`, depois `%LOCALAPPDATA%\Python\bin\python.exe` se
+> existir e, por fim, `python` do `PATH`. O runtime selecionado precisa ser
+> Python >=3.13 e importar Flask; o batch valida isso antes de abrir o navegador.
+> Para tarefas agendadas, use diretamente o caminho absoluto de um runtime
+> validado, sem depender de um diretório interno versionado.
 
 Para restaurar de verdade, veja [RESTAURAR.md](RESTAURAR.md). A lista dos
 arquivos confidenciais que precisam de protecao independente esta em
@@ -68,8 +69,9 @@ arquivos confidenciais que precisam de protecao independente esta em
 
 ## Destino dos backups
 
-O destino é definido antes do primeiro backup por quem opera o host, nunca pela
-interface HTTP. Execute localmente:
+Sem configuração, o destino portátil é a pasta irmã
+`<Programacao>\Backups\BackupRestore`, derivada da posição deste repositório.
+Para fixar outro destino antes do primeiro backup, o operador executa localmente:
 
 ```powershell
 python cli.py configurar-raiz 'C:\caminho\dos\backups'
@@ -90,6 +92,15 @@ efetivos. A raiz e o limite ficam em `configuracao.local.json`, que não entra n
 Git. Instalações anteriores continuam válidas: a raiz já gravada passa a ser seu
 limite até o operador executar o comando acima.
 
+A precedência do destino é: `raiz_backup` em `configuracao.local.json`, depois
+`BACKUPRESTORE_RAIZ_BACKUP`, depois o padrão portátil. Sem limite explícito, o
+próprio destino efetivo é o limite permitido. A variável
+`BACKUPRESTORE_RAIZ_PERMITIDA` sempre prevalece como fronteira de segurança.
+
+Os projetos locais são procurados no diretório pai deste repositório. Se os
+checkouts estiverem em outro lugar, defina `BACKUPRESTORE_RAIZ_PROJETOS` antes
+de iniciar a CLI, a interface ou a tarefa agendada.
+
 Para evitar que o catálogo passe a apontar para arquivos inexistentes, a troca
 de destino é bloqueada depois que há artefatos catalogados; nesse caso, migre os
 arquivos e o catálogo de forma consciente. Referências do catálogo que tentem
@@ -106,19 +117,15 @@ e um `python cli.py ensaio --projeto <slug>` no sandbox.
 
 ## O que é gravado
 
-Dois artefatos por projeto, em `<raiz-configurada>\projects\<projeto>\` (a
-raiz é a escolhida em Configurações — ver seção anterior):
+Dois artefatos por projeto, em `<raiz-configurada>\projects\<projeto>\`:
 
 | Tipo | Ferramenta | Por quê |
 |---|---|---|
-| `banco/*.dump` | `pg_dump --format=custom` | comprimido (6,7 MB contra 94 MB em SQL puro no ConfortoTermico) e aceita `pg_restore` seletivo |
+| `banco/*.dump` | `pg_dump --format=custom` | formato comprimido que aceita `pg_restore` seletivo |
 | `codigo/*.zip` | Git + ZIP do aplicativo | arquivos rastreados e não ignorados, incluindo trabalho local permitido |
 
 Cada um com `.manifest.json` ao lado (SHA-256, tamanho, origem, e para código o
 `HEAD` e se havia trabalho não commitado).
-
-Total atual: **32 MB** para os quatro projetos locais, incluindo dumps de
-segurança.
 
 **Os quatro projetos `_vps` só têm `banco/*.dump`** — sem `codigo/`, porque o
 código de produção não é um artefato deste sistema (ver seção "Agendamento" e
@@ -135,19 +142,18 @@ O que este projeto é, na prática. Estão em `motor.py` e `restaurar.py`.
 1. **Escrita atômica.** Tudo nasce em `temp/` e só vira nome final por
    `os.replace`. Um dump interrompido nunca vira arquivo truncado com nome bom.
 2. **Verificar antes de confiar.** Código de saída zero não prova nada: todo
-   artefato é relido (`pg_restore --list`, `testzip`) antes
-   de entrar no catálogo. Medido: dump truncado sai com exit 1, dump com bytes
-   trocados derruba o `pg_restore` — ambos reprovados.
+   artefato é relido (`pg_restore --list`, `testzip`) antes de entrar no
+   catálogo.
 3. **Nunca apagar antes de ter o substituto.** A retenção roda depois da
    verificação do artefato novo, e nunca remove o último válido de um tipo.
 4. **Devolver o contêiner ao estado em que estava**, em `finally`, inclusive
    quando o backup falha.
 5. **Toda restauração começa por um dump de segurança** do destino, verificado.
    Se ele falhar, a restauração é abortada.
-6. **Restauração exige o nome do banco digitado**, e os contêineres reais são
-   recusados por par `(ambiente, contêiner)` — não há flag que libere. O par
-   existe porque os contêineres do VPS usam os mesmos nomes dos locais; uma
-   lista só de nomes os protegeria por coincidência, não por desenho.
+6. **Restauração exige o nome do banco digitado**, e aceita exclusivamente o
+   contêiner `backuprestore-sandbox` — não há flag que libere outro destino.
+   A allowlist exata barra também nomes novos, renomeados ou informados por
+   engano, antes de consultar o Docker ou criar o dump de segurança.
 7. **SHA-256 gravado e reconferível** por `python cli.py verificar`.
 
 E a que valida as outras: **um artefato só serve se você já restaurou a partir
@@ -165,9 +171,8 @@ raiz somente leitura; apenas o volume descartável de dados e os diretórios
 transitórios em `tmpfs` permanecem graváveis. Isso não altera o procedimento de
 descarte nem os artefatos de backup.
 
-O sandbox também fica limitado a 2 vCPU — folga suficiente para o maior ensaio
-de restauração local, sem permitir que um dump defeituoso ocupe todos os 20
-vCPU disponíveis no host.
+O sandbox também fica limitado a 2 vCPU, para que um dump defeituoso não
+monopolize o host.
 
 ```bash
 docker compose -f compose.teste.yaml up -d
@@ -205,14 +210,11 @@ O backup só vale se rodar sozinho. Registre as duas tarefas uma vez
 (PowerShell): a local, e a que busca do VPS meia hora depois — dando folga
 para o timer do servidor (03:00 America/Sao_Paulo) terminar de produzir o dia.
 
-```powershell
-schtasks /create /tn "BackupRestore" /tr '"C:\Users\MSPA\AppData\Local\Python\bin\python.exe" "C:\Users\MSPA\Dropbox\Programacao\VSCodeProjects\BackupRestore\cli.py" backup --todos' /sc daily /st 03:00
-schtasks /create /tn "BackupRestoreVPS" /tr '"C:\Users\MSPA\AppData\Local\Python\bin\python.exe" "C:\Users\MSPA\Dropbox\Programacao\VSCodeProjects\BackupRestore\cli.py" sincronizar-vps --todos' /sc daily /st 03:30
-```
-
-Caminho completo do Python de propósito — o Agendador não roda no Git Bash, então
-`python` puro pegaria o atalho da Loja e a tarefa falharia em silêncio. Depois de
-criar, confira o resultado da primeira execução com `python cli.py listar`.
+O projeto não cria nem habilita tarefas automaticamente. No Agendador do
+Windows, use o caminho absoluto do Python validado e o caminho absoluto de
+`cli.py`; configure como argumentos `backup --todos` para a tarefa local e
+`sincronizar-vps --todos` para a tarefa de busca. Depois da primeira execução,
+confira o resultado com `python cli.py listar`.
 
 **A tarefa do VPS precisa do sandbox de pé** (`docker compose -f
 compose.teste.yaml up -d`, uma vez — o script deixa o contêiner parado entre
@@ -237,7 +239,7 @@ quando o Agendador de Tarefas chama o `ssh.exe` real do Windows.
 ## Arquivos
 
 ```
-projetos.py     os 8 projetos (4 locais + 4 de origem VPS) e os contêineres protegidos
+projetos.py     os 8 projetos (4 locais + 4 de origem VPS) e o sandbox autorizado
 banco.py        catálogo SQLite (3 tabelas, sem ORM, sem migrações)
 motor.py        produção e verificação dos artefatos locais — o núcleo
 restaurar.py    travas, dump de segurança e pg_restore
@@ -246,11 +248,3 @@ cli.py          linha de comando
 web.py          interface Flask
 catalogo.sqlite3  fica fora da pasta de backup de propósito
 ```
-
-`docs/historico/` guarda os documentos de decisão (`claude-ANALISE.md`,
-`claude-JUNCAO.md`, `claude-PLANO.md`) e a especificação anterior
-(`ESPECIFICACAO.md`) — nenhum deles é lido pelo código, e cada um tem uma
-nota no topo sobre o que diverge do estado atual. `docs/prototipo/`
-(`index.html`, `app.js`, `styles.css`) é o protótipo estático original,
-inalcançável por qualquer rota do Flask; a interface atual reusa o CSS dele
-em `static/css/style.css`.

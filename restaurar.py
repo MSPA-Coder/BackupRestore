@@ -2,11 +2,10 @@
 
 Três travas, nesta ordem, antes de qualquer escrita:
 
-- **Destino proibido.** Os contêineres dos projetos reais estão em
-  `CONTAINERS_PROTEGIDOS` e são recusados aqui. Não existe flag que libere: o
-  erro caro não é escolher o arquivo errado, é acertar o arquivo e errar o
-  destino. Restaurar sobre um projeto real é trabalho manual, consciente, com o
-  procedimento do RESTAURAR.md na tela.
+- **Destino permitido.** `backuprestore-sandbox` é o único contêiner aceito.
+  Não existe flag que libere outro nome: o erro caro não é escolher o arquivo
+  errado, é acertar o arquivo e errar o destino. Restaurar sobre qualquer outro
+  contêiner é trabalho manual, consciente, com o procedimento do RESTAURAR.md.
 - **Confirmação digitada (regra 6).** O nome do banco de destino, digitado à
   mão. Sem "tem certeza? [Sim]" — a fricção é o recurso de segurança.
 - **Dump de segurança (regra 5).** Antes de tocar no destino, dump do estado
@@ -24,7 +23,7 @@ import time
 import banco
 import motor
 from configuracao import caminho_sob_raiz
-from projetos import CONTAINERS_PROTEGIDOS, Projeto, por_slug
+from projetos import CONTAINER_SANDBOX, Projeto, por_slug
 
 
 class RestauracaoRecusada(RuntimeError):
@@ -140,18 +139,15 @@ def restaurar(
     usuario_destino: str,
     confirmacao: str,
 ) -> dict:
-    """Restaura um dump do catálogo num destino que não seja um projeto real."""
+    """Restaura um dump do catálogo exclusivamente no sandbox descartável."""
 
-    # Trava 1 — destino proibido. Antes de tudo, inclusive de ler o artefato.
-    # A restauração só fala com o Docker local, nunca com o VPS por SSH — daqui
-    # o ambiente do destino é sempre "local". Comparar por par, não só pelo
-    # nome, é o que faz a trava valer por desenho: os contêineres do VPS usam
-    # os mesmos nomes dos daqui, e um conjunto só de nomes os protegeria por
-    # coincidência.
-    if ("local", container_destino) in CONTAINERS_PROTEGIDOS:
+    # Trava 1 — allowlist exata. Antes de tudo, inclusive de ler o artefato ou
+    # falar com o Docker. Bloquear somente os nomes conhecidos deixaria passar
+    # um contêiner real novo, renomeado ou informado por engano.
+    if container_destino != CONTAINER_SANDBOX:
         raise RestauracaoRecusada(
-            f"{container_destino} é o contêiner de um projeto real e não é destino "
-            "aceito. Use o sandbox (compose.teste.yaml) ou siga o RESTAURAR.md à mão."
+            f"destino recusado: somente {CONTAINER_SANDBOX!r} é aceito para "
+            "restauração automática. Para outro destino, siga o RESTAURAR.md à mão."
         )
 
     # Trava 2 — confirmação digitada.
@@ -249,7 +245,7 @@ def comparar_com_origem(projeto: Projeto, container_destino: str, usuario_destin
         # `projeto.container` é só um nome — para um projeto "vps" ele colide
         # de propósito com o contêiner local do mesmo nome (ver projetos.py).
         # Ler a "origem" por aqui compararia com o banco local errado. A
-        # origem VPS ainda não tem um caminho de leitura (Fase 6 do plano).
+        # origem VPS deliberadamente não oferece um caminho de leitura SQL.
         raise RuntimeError(
             f"{projeto.slug}: comparação com a origem via contêiner local não vale "
             f"para ambiente={projeto.ambiente!r} — o nome do contêiner colide com o "

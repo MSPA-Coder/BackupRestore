@@ -4,7 +4,7 @@ O BackupRestore não fala mais com a produção diretamente — não dispara
 `pg_dump`, não consulta nem liga contêiner de projeto real. Fala só com o
 agente restrito do servidor (`_manutencao/vps/backup-agent.sh`, instalado com
 uma chave SSH dedicada travada por `command=`), que só sabe quatro verbos:
-`listar`, `enviar`, `apagar`, `estado`. Ver PLANO_BACKUPRESTORE_VPS.md, seção 5.
+`listar`, `enviar`, `apagar`, `estado`.
 
 O ciclo, por projeto, para cada dump que existe lá e ainda não está aqui:
 
@@ -17,7 +17,7 @@ O ciclo, por projeto, para cada dump que existe lá e ainda não está aqui:
    do download — é o que faz a retenção continuar correta depois de um PC que
    ficou dias fora buscar vários de uma vez;
 5. só então pedir a remoção lá (`apagar`) — o servidor decide sozinho se
-   recusa por ser o mais recente (D8); essa recusa é esperada, não é falha.
+   recusa por ser o mais recente; essa recusa é esperada, não é falha.
 
 Um dump que reprova o SHA-256 ou a releitura não entra no catálogo e não tem
 remoção pedida — regra 3 do projeto ("nunca apagar antes de ter o
@@ -204,7 +204,7 @@ def enviar_remoto(alvo: dict[str, str], dump: DumpRemoto, destino: str) -> None:
 
 def _apagar_remoto(alvo: dict[str, str], dump: DumpRemoto) -> str:
     """Pede a remoção no servidor. Recusa por ser o mais recente é esperada
-    (D8) — quem decide é o servidor, não este cliente."""
+    — quem decide é o servidor, não este cliente."""
     processo = _ssh(alvo, f"apagar {_argumento(dump.caminho_remoto)}")
     if processo.returncode == 0:
         return "apagado"
