@@ -54,6 +54,11 @@ O agente do servidor só sabe quatro verbos (`listar`, `enviar`, `apagar`,
 `estado`) — este cliente nunca dispara `pg_dump` remoto nem toca em contêiner
 de produção.
 
+Se qualquer dump remoto reprovar o SHA-256, a releitura ou outro requisito de
+integridade, os demais projetos e dumps ainda são processados, mas a execução
+daquele projeto fica registrada como falha e `sincronizar-vps` termina com
+código diferente de zero. As contagens exibidas indicam o resultado parcial.
+
 > **Atenção ao interpretador.** `iniciar.bat` usa primeiro o executável indicado
 > por `BACKUPRESTORE_PYTHON`, depois `%LOCALAPPDATA%\Python\bin\python.exe` se
 > existir e, por fim, `python` do `PATH`. O runtime selecionado precisa ser
