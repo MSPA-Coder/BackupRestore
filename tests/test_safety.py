@@ -13,9 +13,10 @@ from unittest.mock import ANY, patch
 import configuracao
 import cli
 import motor
+import projetos
 import restaurar
 import web
-from projetos import CONTAINERS_PROTEGIDOS, PROJETOS, por_slug
+from projetos import CONTAINER_SANDBOX, CONTAINERS_PROTEGIDOS, PROJETOS, por_slug
 
 PROJETO_LOCAL = next(p for p in PROJETOS if p.ambiente == "local")
 PROJETO_VPS = next(p for p in PROJETOS if p.ambiente == "vps")
@@ -29,10 +30,29 @@ class ProjectCatalogTests(unittest.TestCase):
         )
 
     def test_local_and_vps_projects_share_container_names_by_design(self) -> None:
-        # A trava (D3) só faz sentido porque essa colisão é real, não um erro
-        # de digitação: local e VPS falam do mesmo contêiner por nome.
+        # A colisão é real, não um erro de digitação: local e VPS descrevem o
+        # mesmo serviço em ambientes diferentes.
         self.assertEqual(PROJETO_LOCAL.container, PROJETO_VPS.container)
         self.assertNotEqual(PROJETO_LOCAL.slug, PROJETO_VPS.slug)
+
+    def test_project_root_defaults_to_repository_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory, "Programacao", "VSCodeProjects", "BackupRestore")
+            expected = repository.parent.resolve()
+            self.assertEqual(
+                projetos.resolver_raiz_projetos(pasta_aplicacao=repository),
+                str(expected),
+            )
+
+    def test_project_root_explicit_override_is_normalized(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            expected = Path(directory, "checkouts").resolve()
+            with patch.dict(
+                os.environ,
+                {projetos.VARIAVEL_RAIZ_PROJETOS: str(Path(directory, "x", "..", "checkouts"))},
+                clear=True,
+            ):
+                self.assertEqual(projetos.resolver_raiz_projetos(), str(expected))
 
     def test_vps_project_has_no_local_folder_or_code_type(self) -> None:
         self.assertEqual(PROJETO_VPS.pasta, "")
@@ -45,9 +65,25 @@ class ProjectCatalogTests(unittest.TestCase):
 
 
 class RestoreGuardTests(unittest.TestCase):
-    def test_protected_container_is_rejected_before_catalog_access(self) -> None:
+    def test_sandbox_is_accepted_as_restore_destination(self) -> None:
+        with patch.object(restaurar.banco, "obter_artefato", return_value=None) as get_artifact:
+            with self.assertRaisesRegex(restaurar.RestauracaoRecusada, "não existe no catálogo"):
+                restaurar.restaurar(
+                    1,
+                    container_destino=CONTAINER_SANDBOX,
+                    banco_destino="destino",
+                    usuario_destino="sandbox",
+                    confirmacao="destino",
+                )
+        get_artifact.assert_called_once_with(1)
+
+    def test_real_container_is_rejected_without_docker_or_safety_dump(self) -> None:
         protected = PROJETO_LOCAL.container
-        with patch.object(restaurar.banco, "obter_artefato") as get_artifact:
+        with (
+            patch.object(restaurar.banco, "obter_artefato") as get_artifact,
+            patch.object(restaurar.motor, "_rodar") as run_docker,
+            patch.object(restaurar, "_dump_de_seguranca") as safety_dump,
+        ):
             with self.assertRaises(restaurar.RestauracaoRecusada):
                 restaurar.restaurar(
                     1,
@@ -57,29 +93,33 @@ class RestoreGuardTests(unittest.TestCase):
                     confirmacao="destino",
                 )
         get_artifact.assert_not_called()
+        run_docker.assert_not_called()
+        safety_dump.assert_not_called()
 
-    def test_vps_named_container_is_still_rejected_by_pair(self) -> None:
-        # O contêiner do projeto "vps" tem o mesmo nome do local — a trava
-        # continua barrando esse nome porque ("local", nome) está no
-        # conjunto, não porque o par "vps" está lá.
-        self.assertEqual(PROJETO_VPS.container, PROJETO_LOCAL.container)
-        with patch.object(restaurar.banco, "obter_artefato") as get_artifact:
+    def test_arbitrary_unprotected_name_is_rejected_without_docker_or_safety_dump(self) -> None:
+        with (
+            patch.object(restaurar.banco, "obter_artefato") as get_artifact,
+            patch.object(restaurar.motor, "_rodar") as run_docker,
+            patch.object(restaurar, "_dump_de_seguranca") as safety_dump,
+        ):
             with self.assertRaises(restaurar.RestauracaoRecusada):
                 restaurar.restaurar(
                     1,
-                    container_destino=PROJETO_VPS.container,
+                    container_destino="postgres-descartavel-qualquer",
                     banco_destino="destino",
                     usuario_destino="sandbox",
                     confirmacao="destino",
                 )
         get_artifact.assert_not_called()
+        run_docker.assert_not_called()
+        safety_dump.assert_not_called()
 
     def test_confirmation_is_rejected_before_catalog_access(self) -> None:
         with patch.object(restaurar.banco, "obter_artefato") as get_artifact:
             with self.assertRaises(restaurar.RestauracaoRecusada):
                 restaurar.restaurar(
                     1,
-                    container_destino="backuprestore-sandbox",
+                    container_destino=CONTAINER_SANDBOX,
                     banco_destino="destino",
                     usuario_destino="sandbox",
                     confirmacao="outro",
@@ -162,6 +202,59 @@ class RestoreGuardTests(unittest.TestCase):
 
 
 class BackupRootGuardTests(unittest.TestCase):
+    def test_default_root_is_derived_from_repository_location(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory, "Programacao", "VSCodeProjects", "BackupRestore")
+            config = Path(directory, "ausente.json")
+            expected = Path(directory, "Programacao", "Backups", "BackupRestore").resolve()
+            with (
+                patch.object(configuracao, "PASTA_APLICACAO", str(repository)),
+                patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(config)),
+                patch.dict(os.environ, {}, clear=True),
+            ):
+                self.assertEqual(configuracao.raiz_backup(), str(expected))
+                self.assertEqual(configuracao.raiz_permitida(), str(expected))
+
+    def test_persisted_root_precedes_environment_override(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            allowed = Path(directory).resolve()
+            persisted = Path(directory, "persisted")
+            environment = Path(directory, "environment")
+            config = Path(directory, "config.json")
+            config.write_text(
+                json.dumps({"raiz_backup": str(persisted), "raiz_permitida": str(allowed)})
+            )
+            with (
+                patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(config)),
+                patch.dict(
+                    os.environ,
+                    {configuracao.VARIAVEL_RAIZ_BACKUP: str(environment)},
+                    clear=True,
+                ),
+            ):
+                self.assertEqual(configuracao.raiz_backup(), str(persisted.resolve()))
+
+    def test_environment_root_is_its_own_limit_without_explicit_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            environment = Path(directory, "environment")
+            config = Path(directory, "ausente.json")
+            with (
+                patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(config)),
+                patch.dict(
+                    os.environ,
+                    {configuracao.VARIAVEL_RAIZ_BACKUP: str(environment)},
+                    clear=True,
+                ),
+            ):
+                self.assertEqual(configuracao.raiz_backup(), str(environment.resolve()))
+                self.assertEqual(configuracao.raiz_permitida(), str(environment.resolve()))
+
+    def test_sandbox_compose_has_no_host_backup_bind(self) -> None:
+        compose = Path(__file__).resolve().parents[1] / "compose.teste.yaml"
+        content = compose.read_text(encoding="utf-8")
+        self.assertNotIn("/backups", content)
+        self.assertNotIn("C:/Users/MSPA", content)
+
     def test_external_root_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             permitida = Path(directory, "permitida")
@@ -236,9 +329,8 @@ class BackupRootGuardTests(unittest.TestCase):
             sys.modules.pop("web", None)
 
     def test_web_does_not_expose_vps_change_post(self) -> None:
-        # Irmão de test_web_does_not_expose_root_change_post (D7): a interface
-        # nem sequer importa a função de escrita, então não há como uma rota
-        # vir a chamá-la por engano.
+        # A interface nem sequer importa a função de escrita, então não há
+        # como uma rota vir a chamá-la por engano.
         self.assertFalse(hasattr(web, "configurar_vps"))
         regras = [r for r in web.app.url_map.iter_rules() if r.rule == "/configuracoes"]
         self.assertEqual(len(regras), 1)
@@ -296,8 +388,8 @@ class VpsTargetConfigTests(unittest.TestCase):
 
 class EnsaioVpsTests(unittest.TestCase):
     def test_ensaio_de_projeto_vps_pula_comparacao_com_origem(self) -> None:
-        # `comparar_com_origem` recusaria (guarda da Fase 3: o contêiner do
-        # projeto vps colide de nome com o local). `cli.comando_ensaio` não
+        # `comparar_com_origem` recusaria porque o contêiner do projeto VPS
+        # colide de nome com o local. `cli.comando_ensaio` não
         # deve nem chamá-la para um projeto de ambiente != local — confere só
         # o que a restauração produziu no sandbox.
         artefato = {"id": 1, "caminho_relativo": "projects/x/banco/x.dump", "projeto": PROJETO_VPS.slug}

@@ -3,12 +3,12 @@
 # Existe por um motivo só: dar um PostgreSQL descartável onde restaurações são
 # testadas. Nenhuma restauração deste projeto pode apontar para os contêineres
 # reais (conforto-termico-postgres-1, mega-sena-postgres-1,
-# controle-bancario-postgres-1, controle-renda-variavel-db-1) — motor.py
-# recusa esses nomes por lista, e este é o alvo permitido.
+# controle-bancario-postgres-1, controle-renda-variavel-db-1) — restaurar.py
+# aceita exclusivamente o alvo descartável abaixo.
 #
-# Acumula um segundo papel: o host não tem pg_restore instalado (e não deve
-# ter). Este contêiner enxerga a pasta de backup em /backups somente leitura e
-# serve de caixa de ferramentas para validar artefatos com `pg_restore --list`.
+# Também serve de caixa de ferramentas para `pg_restore --list`. Os dumps são
+# enviados pelo processo do host à entrada padrão de `docker exec`; o sandbox
+# não monta nem enxerga a pasta de backups.
 #
 #   docker compose -f compose.teste.yaml up -d
 #   docker compose -f compose.teste.yaml down -v     (descarta tudo)
@@ -39,7 +39,6 @@ services:
       - "127.0.0.1:5439:5432"
     volumes:
       - sandbox_data:/var/lib/postgresql/data
-      - "C:/Users/MSPA/Dropbox/Programacao/Backups/BackupRestore:/backups:ro"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sandbox -d sandbox"]
       interval: 5s
@@ -48,9 +47,8 @@ services:
       start_period: 5s
     stop_grace_period: 30s
     pids_limit: 256
-    # O maior ensaio atual restaura o ConfortoTermico (~353 mil linhas). O
-    # limite fica muito acima do uso observado (~25 MiB), sem deixar um dump
-    # defeituoso consumir toda a memoria do Docker Desktop.
+    # Mantém folga para os ensaios sem deixar um dump defeituoso consumir toda
+    # a memória disponível ao Docker Desktop.
     mem_limit: 768m
     cpus: "2.0"
     logging:

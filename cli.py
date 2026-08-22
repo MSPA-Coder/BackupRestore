@@ -5,7 +5,7 @@
     python cli.py verificar
     python cli.py ensaio --projeto conforto_termico
 
-A interface da Fase 2 usa exatamente as mesmas funções; nada de execução vive lá.
+A interface usa exatamente as mesmas funções; nada de execução vive nela.
 """
 
 from __future__ import annotations
@@ -40,9 +40,9 @@ def _tamanho(bytes_: int) -> str:
 
 def comando_backup(args: argparse.Namespace) -> int:
     # "--todos" continua sendo só os projetos locais: motor.fazer_backup
-    # recusa qualquer outro ambiente, e ainda não existe via de produção para
-    # eles (Fase 4 do plano do VPS). Pedir um projeto de outro ambiente por
-    # slug explícito segue permitido — e recusado com erro claro pelo motor.
+    # recusa qualquer outro ambiente. Os artefatos do VPS chegam pela via
+    # separada `sincronizar-vps`; pedir um projeto de outro ambiente por slug
+    # explícito segue permitido — e recusado com erro claro pelo motor.
     alvos = [p for p in PROJETOS if p.ambiente == "local"] if args.todos else [por_slug(args.projeto)]
     tipos = tuple(args.tipos.split(",")) if args.tipos else None
 
@@ -136,7 +136,7 @@ def comando_sincronizar_vps(args: argparse.Namespace) -> int:
 
 
 def comando_configurar_vps(args: argparse.Namespace) -> int:
-    """Única via de escrita do alvo SSH do VPS: operador no host (D7)."""
+    """Única via de escrita do alvo SSH do VPS: operador no host."""
     try:
         alvo = configurar_vps(args.host, args.usuario, args.chave)
     except ConfiguracaoInvalida as erro:
@@ -205,14 +205,14 @@ def comando_ensaio(args: argparse.Namespace) -> int:
     if projeto.ambiente != "local":
         # A origem é outra máquina — `comparar_com_origem` recusaria (ver a
         # trava em restaurar.py), de propósito: o agente da Camada 2 só sabe
-        # listar/enviar/apagar/estado (D1), não tem verbo de consulta SQL, e
+        # listar/enviar/apagar/estado, não tem verbo de consulta SQL, e
         # não é para ganhar um só para isto. Aqui só confere o que a
         # restauração produziu; bater com a produção é conferência manual.
         resumo = restauracao.resumo_banco(CONTAINER_SANDBOX, USUARIO_SANDBOX, destino)
         print(f"\n   RESTAURADO — {len(resumo)} tabela(s) com dados, "
               f"{sum(resumo.values()):,} linha(s) no total.".replace(",", "."))
         print(f"   Comparação automática com a origem não existe para ambiente="
-              f"{projeto.ambiente!r} (D1: o agente do VPS não tem verbo de consulta).")
+              f"{projeto.ambiente!r} (o agente do VPS não oferece consulta SQL).")
         return 0 if resumo else 1
 
     print("\nComparando com a origem…")
@@ -285,7 +285,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--chave", required=True, help="caminho da chave SSH dedicada do agente")
     p.set_defaults(funcao=comando_configurar_vps)
 
-    p = sub.add_parser("restaurar", help="restaura um dump num destino não protegido")
+    p = sub.add_parser("restaurar", help="restaura um dump somente no sandbox descartável")
     p.add_argument("--artefato", type=int, required=True)
     p.add_argument("--destino-container", required=True)
     p.add_argument("--destino-banco", required=True)

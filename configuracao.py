@@ -10,8 +10,14 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 PASTA_APLICACAO = os.path.dirname(os.path.abspath(__file__))
 ARQUIVO_CONFIGURACAO = os.path.join(PASTA_APLICACAO, "configuracao.local.json")
-RAIZ_PADRAO = r"C:\Users\MSPA\Dropbox\BackpsDB"
+VARIAVEL_RAIZ_BACKUP = "BACKUPRESTORE_RAIZ_BACKUP"
 VARIAVEL_RAIZ_PERMITIDA = "BACKUPRESTORE_RAIZ_PERMITIDA"
+
+
+def _raiz_padrao(pasta_aplicacao: str | os.PathLike[str] | None = None) -> str:
+    """Pasta irmã ``Backups/BackupRestore`` relativa a ``VSCodeProjects``."""
+    aplicacao = Path(pasta_aplicacao or PASTA_APLICACAO).resolve(strict=False)
+    return str((aplicacao.parent.parent / "Backups" / "BackupRestore").resolve(strict=False))
 
 
 class ConfiguracaoInvalida(ValueError):
@@ -73,18 +79,26 @@ def raiz_permitida() -> str:
     ``cli.py configurar-raiz``; isso mantém os artefatos existentes acessíveis.
     """
     dados = _ler()
-    valor = (
-        os.environ.get(VARIAVEL_RAIZ_PERMITIDA)
-        or dados.get("raiz_permitida")
-        or dados.get("raiz_backup")
-        or RAIZ_PADRAO
-    )
+    valor = os.environ.get(VARIAVEL_RAIZ_PERMITIDA) or dados.get("raiz_permitida")
+    if not valor:
+        # Sem limite explícito, o próprio destino efetivo é o limite. Isso
+        # também torna o override de destino utilizável sem ampliar sua árvore.
+        valor = _valor_raiz_backup(dados)
     return _normalizar(str(valor))
+
+
+def _valor_raiz_backup(dados: dict[str, str]) -> str:
+    """Configuração persistida vence o override de ambiente; ambos vencem o padrão."""
+    return str(
+        dados.get("raiz_backup")
+        or os.environ.get(VARIAVEL_RAIZ_BACKUP)
+        or _raiz_padrao()
+    )
 
 
 def raiz_backup() -> str:
     dados = _ler()
-    valor = dados.get("raiz_backup") or os.environ.get("BACKUPRESTORE_RAIZ_BACKUP") or RAIZ_PADRAO
+    valor = _valor_raiz_backup(dados)
     return _dentro_da_raiz(_normalizar(str(valor)), raiz_permitida())
 
 
@@ -126,7 +140,7 @@ _CAMPOS_VPS = ("host", "usuario", "chave")
 
 def alvo_vps() -> dict[str, str] | None:
     """Host, usuário e caminho da chave SSH dedicada da Camada 2, ou ``None``
-    se ainda não configurado. Somente leitura para a interface web (D7)."""
+    se ainda não configurado. Somente leitura para a interface web."""
     dados = _ler()
     vps = dados.get("vps")
     if not isinstance(vps, dict) or not all(vps.get(campo) for campo in _CAMPOS_VPS):

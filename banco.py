@@ -5,7 +5,7 @@ Sem ORM e sem migrações. São três tabelas de forma fixa; `criar_tabelas()` u
 mais código que o schema inteiro.
 
 Cada função abre e fecha a própria conexão. O modo WAL permite que a interface
-(Fase 2) leia enquanto o motor escreve, que é a única concorrência que existe.
+leia enquanto o motor escreve, que é a única concorrência que existe.
 """
 
 from __future__ import annotations
