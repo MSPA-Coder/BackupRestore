@@ -23,7 +23,7 @@ import time
 import banco
 import motor
 from configuracao import caminho_sob_raiz
-from projetos import CONTAINER_SANDBOX, Projeto, por_slug
+from projetos import CONTAINER_SANDBOX, Projeto
 
 
 class RestauracaoRecusada(RuntimeError):
