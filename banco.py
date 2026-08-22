@@ -143,13 +143,6 @@ def fechar_execucao(execucao_id: int, situacao: str, erro: str | None = None) ->
         )
 
 
-def proxima_da_fila() -> sqlite3.Row | None:
-    with conectar() as conexao:
-        return conexao.execute(
-            "SELECT * FROM execucoes WHERE situacao = 'fila' ORDER BY id LIMIT 1"
-        ).fetchone()
-
-
 # --------------------------------------------------------------------------
 # Artefatos
 # --------------------------------------------------------------------------
