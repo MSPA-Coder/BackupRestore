@@ -211,15 +211,16 @@ pip e GitHub Actions semanalmente, agrupando atualizações minor/patch.
 
 ## Agendamento
 
-O backup só vale se rodar sozinho. Registre as duas tarefas uma vez
-(PowerShell): a local, e a que busca do VPS meia hora depois — dando folga
-para o timer do servidor (03:00 America/Sao_Paulo) terminar de produzir o dia.
+O backup só vale se rodar sozinho. Registre uma única tarefa diária às 03:30,
+usando o caminho absoluto do Python validado e `agendamento.py`. O
+orquestrador sincroniza o VPS todos os dias e, aos domingos, executa o backup
+local depois das 04:00. Se o domingo for perdido, a próxima execução diária
+faz o backup local pendente depois da sincronização do VPS.
 
-O projeto não cria nem habilita tarefas automaticamente. No Agendador do
-Windows, use o caminho absoluto do Python validado e o caminho absoluto de
-`cli.py`; configure como argumentos `backup --todos` para a tarefa local e
-`sincronizar-vps --todos` para a tarefa de busca. Depois da primeira execução,
-confira o resultado com `python cli.py listar`.
+Habilite a opção **Executar a tarefa assim que possível após perder um início
+agendado** e mantenha a política de instâncias como **Não iniciar uma nova
+instância**. Isso elimina concorrência pelo catálogo e pelos recursos Docker.
+Depois da primeira execução, confira o resultado com `python cli.py listar`.
 
 **A tarefa do VPS precisa do sandbox de pé** (`docker compose -f
 compose.teste.yaml up -d`, uma vez — o script deixa o contêiner parado entre

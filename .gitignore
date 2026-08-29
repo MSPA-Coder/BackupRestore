@@ -1,4 +1,5 @@
 configuracao.local.json
+agendamento.local.json
 catalogo.sqlite3
 catalogo.sqlite3-shm
 catalogo.sqlite3-wal

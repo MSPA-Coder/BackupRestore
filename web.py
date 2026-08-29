@@ -18,6 +18,8 @@ from __future__ import annotations
 import os
 import threading
 
+from urllib.parse import urlsplit
+
 from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
 
 import banco
@@ -30,6 +32,56 @@ USUARIO_SANDBOX = "sandbox"
 ROTULOS = {"banco": "Banco de dados", "codigo": "Código"}
 
 app = Flask(__name__)
+
+
+# --------------------------------------------------------------------------
+# Fronteira de origem
+# --------------------------------------------------------------------------
+#
+# Escutar em 127.0.0.1 impede que a rede alcance este servidor. NÃO impede
+# duas coisas que passam pelo navegador de quem está no host:
+#
+# 1. CSRF de origem cruzada -- enquanto `web.py` estiver rodando, qualquer
+#    página aberta no navegador pode enviar um POST de formulário para
+#    `http://127.0.0.1:5401/...` sem precisar ler a resposta. Isso dispara
+#    backups em série ou alterna a marca de "fixado" nos artefatos.
+# 2. DNS rebinding -- um domínio hostil que resolva para 127.0.0.1 faz o
+#    navegador falar com este servidor mandando `Host: dominio.hostil`, e aí
+#    até as rotas GET (o catálogo, o progresso das execuções) viram leitura
+#    para fora.
+#
+# Duas checagens baratas fecham as duas, sem trazer login nem `SECRET_KEY`
+# para um utilitário que não tem nenhum dos dois:
+#
+# - `Host` precisa ser loopback, em toda requisição -- mata o rebinding;
+# - `Origin`, QUANDO PRESENTE, precisa ser loopback nos métodos mutantes.
+#
+# Origin ausente é aceito de propósito: navegador sempre manda `Origin` num
+# POST de formulário, então a ausência significa cliente que não é navegador
+# (curl, script) -- que não é o cenário de CSRF e é como a CLI conversaria
+# com o servidor se um dia precisar.
+HOSTS_LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1", "[::1]"})
+METODOS_MUTANTES = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _hospedeiro(valor: str) -> str:
+    """Extrai o hostname de um `Host:` ou de uma origem, sem a porta."""
+    sem_esquema = valor.split("//", 1)[-1] if "//" in valor else valor
+    return urlsplit(f"//{sem_esquema}").hostname or ""
+
+
+@app.before_request
+def _recusar_origem_estranha():
+    if _hospedeiro(request.host) not in HOSTS_LOOPBACK:
+        abort(403, "este servidor só atende em loopback")
+
+    if request.method not in METODOS_MUTANTES:
+        return None
+
+    origem = request.headers.get("Origin")
+    if origem and _hospedeiro(origem) not in HOSTS_LOOPBACK:
+        abort(403, "origem não permitida")
+    return None
 
 
 # --------------------------------------------------------------------------
