@@ -179,6 +179,22 @@ def comando_restaurar(args: argparse.Namespace) -> int:
     return 0
 
 
+def _relatar_sem_comparacao(destino: str, motivo: str) -> int:
+    """Relata o que a restauração produziu quando a comparação não aconteceu.
+
+    A restauração é a pergunta principal do ensaio e ela já foi respondida
+    aqui: o dump entrou no sandbox e o banco tem conteúdo. A comparação com a
+    origem é a segunda pergunta, e nem sempre existe — origem VPS não oferece
+    consulta SQL, e stack local parada não pode ser lida. Nos dois casos o
+    veredito é o mesmo: restaurou, sem conferência contra a origem.
+    """
+    resumo = restauracao.resumo_banco(CONTAINER_SANDBOX, USUARIO_SANDBOX, destino)
+    print(f"\n   RESTAURADO — {len(resumo)} tabela(s) com dados, "
+          f"{sum(resumo.values()):,} linha(s) no total.".replace(",", "."))
+    print(f"   {motivo}")
+    return 0 if resumo else 1
+
+
 def comando_ensaio(args: argparse.Namespace) -> int:
     """O teste que importa: restaura no sandbox e compara com a origem.
 
@@ -222,17 +238,23 @@ def comando_ensaio(args: argparse.Namespace) -> int:
         # listar/enviar/apagar/estado, não tem verbo de consulta SQL, e
         # não é para ganhar um só para isto. Aqui só confere o que a
         # restauração produziu; bater com a produção é conferência manual.
-        resumo = restauracao.resumo_banco(CONTAINER_SANDBOX, USUARIO_SANDBOX, destino)
-        print(f"\n   RESTAURADO — {len(resumo)} tabela(s) com dados, "
-              f"{sum(resumo.values()):,} linha(s) no total.".replace(",", "."))
-        print(f"   Comparação automática com a origem não existe para ambiente="
-              f"{projeto.ambiente!r} (o agente do VPS não oferece consulta SQL).")
-        return 0 if resumo else 1
+        return _relatar_sem_comparacao(
+            destino,
+            f"Comparação automática com a origem não existe para ambiente="
+            f"{projeto.ambiente!r} (o agente do VPS não oferece consulta SQL).",
+        )
+
+    try:
+        comparacao = restauracao.comparar_com_origem(
+            projeto, CONTAINER_SANDBOX, USUARIO_SANDBOX, destino
+        )
+    except restauracao.OrigemIndisponivel as erro:
+        # A restauração já aconteceu e foi verificada; o que faltou foi o
+        # segundo passo. Tratar isso como falha do ensaio esconderia a
+        # resposta que o ensaio existe para dar.
+        return _relatar_sem_comparacao(destino, f"Sem comparação: {erro}.")
 
     print("\nComparando com a origem…")
-    comparacao = restauracao.comparar_com_origem(
-        projeto, CONTAINER_SANDBOX, USUARIO_SANDBOX, destino
-    )
     print(f"   tabelas: origem {comparacao['tabelas_origem']} / "
           f"destino {comparacao['tabelas_destino']}")
     print(f"   linhas:  origem {comparacao['linhas_origem']:,} / "
