@@ -143,6 +143,25 @@ def fechar_execucao(execucao_id: int, situacao: str, erro: str | None = None) ->
         )
 
 
+def ultimo_id_execucao() -> int:
+    """Marca d'água para delimitar uma rodada do agendador.
+
+    O `id` é monotônico e único; `pedido_em` tem resolução de segundo e empata
+    entre projetos, então não serve para dizer o que pertence a esta rodada.
+    """
+    with conectar() as conexao:
+        linha = conexao.execute("SELECT COALESCE(MAX(id), 0) AS ultimo FROM execucoes").fetchone()
+        return int(linha["ultimo"])
+
+
+def execucoes_desde(id_minimo: int) -> list[sqlite3.Row]:
+    """Execuções abertas depois da marca, na ordem em que aconteceram."""
+    with conectar() as conexao:
+        return conexao.execute(
+            "SELECT * FROM execucoes WHERE id > ? ORDER BY id", (id_minimo,)
+        ).fetchall()
+
+
 # --------------------------------------------------------------------------
 # Artefatos
 # --------------------------------------------------------------------------
@@ -270,6 +289,36 @@ def obter_execucao(execucao_id: int) -> sqlite3.Row | None:
         return conexao.execute(
             "SELECT * FROM execucoes WHERE id = ?", (execucao_id,)
         ).fetchone()
+
+
+def falhas_atuais() -> list[sqlite3.Row]:
+    """A tentativa mais recente de cada (projeto, operação), quando ela falhou.
+
+    É o estado de agora, não o histórico: a falha some daqui sozinha quando a
+    mesma operação volta a ter sucesso. Execuções em 'fila' ou 'rodando' ficam
+    de fora da escolha do mais recente de propósito — uma rodada interrompida
+    deixa linhas 'rodando' para sempre, e elas esconderiam a falha anterior.
+    """
+    with conectar() as conexao:
+        return conexao.execute(
+            "SELECT e.* FROM execucoes e JOIN ("
+            "  SELECT projeto, operacao, MAX(id) AS id FROM execucoes"
+            "  WHERE situacao IN ('sucesso','falha') GROUP BY projeto, operacao"
+            ") ultima ON ultima.id = e.id"
+            " WHERE e.situacao = 'falha' ORDER BY e.id DESC"
+        ).fetchall()
+
+
+def momento_ultima_execucao() -> str | None:
+    """Quando o motor rodou pela última vez, para qualquer projeto e operação.
+
+    Silêncio prolongado aqui é sintoma: a tarefa agendada foi desabilitada, ou
+    o host ficou fora do ar. Não há falha registrada nesse caso — é justamente
+    a ausência de registro que precisa aparecer.
+    """
+    with conectar() as conexao:
+        linha = conexao.execute("SELECT MAX(pedido_em) AS momento FROM execucoes").fetchone()
+        return linha["momento"] if linha and linha["momento"] else None
 
 
 def listar_eventos(limite: int = 100) -> list[sqlite3.Row]:

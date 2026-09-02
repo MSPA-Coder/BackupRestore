@@ -12,6 +12,48 @@
   </div>
 </div>
 
+{% if falhas or silencio %}
+<section class="alerta" role="alert">
+  <p class="alerta-titulo">
+    {% if falhas %}
+      {{ falhas | length }} operação{{ 'ões' if falhas | length > 1 }} falhando agora
+    {% else %}
+      Sem execução recente
+    {% endif %}
+  </p>
+
+  {% if silencio %}
+    <p class="alerta-linha">
+      {% if dias_sem_execucao is none %}
+        O catálogo não tem nenhuma execução registrada.
+      {% else %}
+        Nenhuma operação registrada há {{ dias_sem_execucao }} dia{{ 's' if dias_sem_execucao != 1 }}.
+      {% endif %}
+      A tarefa diária <strong>BackupRestore</strong> pode estar desabilitada no
+      Agendador de Tarefas, ou o host ficou fora do ar.
+    </p>
+  {% endif %}
+
+  {% for f in falhas %}
+    <div class="alerta-item">
+      <div class="alerta-item-cabeca">
+        <strong>{{ f.projeto }}</strong>
+        <span class="tag fail">{{ f.operacao }}</span>
+        <span class="alerta-momento">{{ (f.terminado_em or f.pedido_em) | momento }}</span>
+      </div>
+      <p class="alerta-motivo">{{ f.erro or 'sem mensagem registrada' }}</p>
+    </div>
+  {% endfor %}
+
+  <p class="alerta-rodape">
+    {% if falhas %}Cada linha sai daqui sozinha quando a mesma operação voltar a
+    ter sucesso.{% endif %}
+    O resumo da última execução agendada fica em <code>ultima-execucao.txt</code>,
+    na pasta do BackupRestore.
+  </p>
+</section>
+{% endif %}
+
 <div class="context-bar">
   <div><span class="context-label">DESTINO CENTRAL</span><strong>{{ raiz }}</strong></div>
   <div><span class="context-label">ESPAÇO LIVRE</span><strong>{{ espaco_livre | tamanho }}</strong></div>

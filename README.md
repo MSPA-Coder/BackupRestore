@@ -220,6 +220,36 @@ faz o backup local pendente depois da sincronização do VPS.
 Habilite a opção **Executar a tarefa assim que possível após perder um início
 agendado** e mantenha a política de instâncias como **Não iniciar uma nova
 instância**. Isso elimina concorrência pelo catálogo e pelos recursos Docker.
+
+### Como saber se a execução agendada falhou
+
+A tarefa sai com código 1 quando qualquer sub-operação falha, mas esse código
+só aparece na coluna "Resultado da última execução" do Agendador. Há dois
+canais legíveis, e nenhum deles exige abrir o `catalogo.sqlite3`:
+
+- **`ultima-execucao.txt`**, na pasta do BackupRestore. Reescrito ao fim de
+  cada execução agendada, com início, fim, veredito e — para cada projeto que
+  falhou — a operação e o motivo inteiro, sem truncar. O mesmo texto vai para
+  a saída padrão, então uma execução manual já o mostra no terminal.
+- **O painel da interface web**, que destaca no topo as operações que estão
+  falhando *agora*: a tentativa mais recente de cada projeto, quando ela
+  falhou. Cada linha sai do destaque sozinha assim que aquela operação volta a
+  ter sucesso — não é o histórico, é o estado atual. O painel também alerta
+  quando o catálogo fica dois dias sem nenhuma execução, que é o sintoma de
+  uma tarefa desabilitada ou de um host que ficou fora do ar.
+
+O destaque cobre apenas o que a tarefa diária repete (sincronização dos
+projetos de origem VPS e backup dos locais). Uma falha vinda de chamada manual
+— por exemplo `backup` num projeto de origem VPS, que o motor recusa por
+projeto — fica no histórico, e não no destaque: nada a repetiria, então ela
+nunca sairia de lá e esvaziaria o alerta de sentido.
+
+Duas causas já vistas, ambas fora do BackupRestore: Tailscale fora do ar no
+host (`ssh: connect to host ... Permission denied` nas quatro sincronizações)
+e as stacks Docker locais paradas (`contêiner ... não existe` nos backups
+locais). Nos dois casos o catálogo e os artefatos anteriores continuam
+íntegros — o que faltou foi a captura do dia.
+
 Depois da primeira execução, confira o resultado com `python cli.py listar`.
 
 **A tarefa do VPS precisa do sandbox de pé** (`docker compose -f
@@ -252,5 +282,7 @@ restaurar.py    travas, dump de segurança e pg_restore
 vps.py          Camada 2: busca, verifica e cataloga os dumps que o VPS produziu sozinho
 cli.py          linha de comando
 web.py          interface Flask
+agendamento.py  orquestra a execução diária e escreve `ultima-execucao.txt`
 catalogo.sqlite3  fica fora da pasta de backup de propósito
+ultima-execucao.txt  resumo legível da última execução agendada (não versionado)
 ```
