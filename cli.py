@@ -83,7 +83,14 @@ def comando_verificar(args: argparse.Namespace) -> int:
     print(f"   conferidos: {contagem['conferidos']}")
     print(f"   ausentes:   {contagem['ausentes']}")
     print(f"   corrompidos:{contagem['corrompidos']}")
-    return 1 if (contagem["ausentes"] or contagem["corrompidos"]) else 0
+    if contagem["nao_verificados"]:
+        print(f"   NÃO verificados: {contagem['nao_verificados']} — o sandbox "
+              f"{CONTAINER_SANDBOX} não está disponível para reler os dumps.")
+        print("   Suba com: docker compose -f compose.teste.yaml up -d")
+        print("   A situação desses artefatos ficou como estava; nada foi julgado.")
+    return 1 if (
+        contagem["ausentes"] or contagem["corrompidos"] or contagem["nao_verificados"]
+    ) else 0
 
 
 def comando_configurar_raiz(args: argparse.Namespace) -> int:
