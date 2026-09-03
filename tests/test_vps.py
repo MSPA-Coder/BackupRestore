@@ -351,12 +351,10 @@ class SincronizarProjetoTests(unittest.TestCase):
             raise AssertionError(f"não deveria buscar — os dumps já existem: {comando!r}")
 
         with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
+            pasta_banco = Path(diretorio, "backups", "projects", PROJETO_VPS.slug, "banco")
+            pasta_banco.mkdir(parents=True)
             for nome in nomes:
-                caminho = configuracao.caminho_sob_raiz(
-                    "projects", PROJETO_VPS.slug, "banco", nome
-                )
-                os.makedirs(os.path.dirname(caminho), exist_ok=True)
-                Path(caminho).write_bytes(b"ja-esta-aqui")
+                (pasta_banco / nome).write_bytes(b"ja-esta-aqui")
 
             with (
                 patch.object(vps, "_ssh", side_effect=_ssh_fake),
