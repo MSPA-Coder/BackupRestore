@@ -411,6 +411,38 @@ class EnsaioVpsTests(unittest.TestCase):
         resumo_mock.assert_called_once()
         comparar_mock.assert_not_called()
 
+    def test_origem_local_indisponivel_nao_derruba_o_ensaio(self) -> None:
+        # A restauração no sandbox já aconteceu quando a origem se revela
+        # inacessível: antes, um `RuntimeError` cru subia até o terminal e
+        # escondia o resultado que o ensaio existe para dar.
+        artefato = {
+            "id": 1,
+            "caminho_relativo": "projects/x/banco/x.dump",
+            "projeto": PROJETO_LOCAL.slug,
+        }
+        argumentos = type("Args", (), {"projeto": PROJETO_LOCAL.slug})()
+
+        with (
+            patch.object(cli.banco, "artefatos_validos", return_value=[artefato]),
+            patch.object(cli.motor, "estado_container", return_value=(True, True)),
+            patch.object(cli.restauracao, "restaurar", return_value={}),
+            patch.object(cli.restauracao, "resumo_banco", return_value={"tabela": 5}),
+            patch.object(
+                cli.restauracao, "comparar_com_origem",
+                side_effect=restaurar.OrigemIndisponivel("contêiner de origem não existe"),
+            ),
+        ):
+            codigo = cli.comando_ensaio(argumentos)
+
+        self.assertEqual(codigo, 0, "restaurou: o ensaio não falhou")
+
+    def test_origem_indisponivel_e_falha_de_dominio_nao_erro_solto(self) -> None:
+        with patch.object(motor, "estado_container", return_value=(False, False)):
+            with self.assertRaises(restaurar.OrigemIndisponivel):
+                restaurar.comparar_com_origem(
+                    PROJETO_LOCAL, CONTAINER_SANDBOX, "sandbox", "ensaio"
+                )
+
 
 class ArtifactValidationTests(unittest.TestCase):
     def test_zip_requires_internal_manifest(self) -> None:

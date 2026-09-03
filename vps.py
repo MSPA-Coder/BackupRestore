@@ -19,6 +19,11 @@ O ciclo, por projeto, para cada dump que existe lá e ainda não está aqui:
 5. só então pedir a remoção lá (`apagar`) — o servidor decide sozinho se
    recusa por ser o mais recente; essa recusa é esperada, não é falha.
 
+Nenhuma falha no passo 5 interrompe o ciclo: a retenção é higiene do servidor,
+a busca é a proteção do dado, e deixar a primeira derrubar a segunda inverte a
+prioridade. Um `apagar` que não responde vira aviso e o laço segue para o
+próximo dump — o servidor reaplica a retenção no ciclo seguinte.
+
 Um dump que reprova o SHA-256 ou a releitura não entra no catálogo e não tem
 remoção pedida — regra 3 do projeto ("nunca apagar antes de ter o
 substituto"), atravessando a rede.
@@ -30,6 +35,7 @@ import datetime
 import os
 import re
 import shlex
+import subprocess
 import time
 from dataclasses import dataclass, field
 
@@ -152,14 +158,24 @@ def _argumento(caminho_remoto: str) -> str:
 
 def _ssh(alvo: dict[str, str], comando: str, *, saida_arquivo: str | None = None,
          tempo_limite: int = TEMPO_LIMITE_COMANDO):
-    return motor._rodar(
-        [
-            "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
-            "-i", alvo["chave"], f"{alvo['usuario']}@{alvo['host']}", comando,
-        ],
-        saida_arquivo=saida_arquivo,
-        tempo_limite=tempo_limite,
-    )
+    """Um `ssh` que estoura o tempo vira `FalhaDeSincronizacao` como qualquer
+    outra recusa do servidor. Sem isto, o `TimeoutExpired` sobe cru pelo laço
+    de `sincronizar_projeto` e derruba o projeto inteiro — inclusive os dumps
+    que ainda nem tinham sido buscados. Observado em produção: uma travada
+    de rede no `apagar` de um dump velho custou a cópia local de três dias."""
+    try:
+        return motor._rodar(
+            [
+                "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
+                "-i", alvo["chave"], f"{alvo['usuario']}@{alvo['host']}", comando,
+            ],
+            saida_arquivo=saida_arquivo,
+            tempo_limite=tempo_limite,
+        )
+    except subprocess.TimeoutExpired:
+        raise FalhaDeSincronizacao(
+            f"o servidor não respondeu a '{comando}' em {tempo_limite}s"
+        ) from None
 
 
 def _alvo_configurado() -> dict[str, str]:
@@ -204,8 +220,15 @@ def enviar_remoto(alvo: dict[str, str], dump: DumpRemoto, destino: str) -> None:
 
 def _apagar_remoto(alvo: dict[str, str], dump: DumpRemoto) -> str:
     """Pede a remoção no servidor. Recusa por ser o mais recente é esperada
-    — quem decide é o servidor, não este cliente."""
-    processo = _ssh(alvo, f"apagar {_argumento(dump.caminho_remoto)}")
+    — quem decide é o servidor, não este cliente.
+
+    Nada aqui levanta: o dump já está verificado e catalogado deste lado, então
+    falhar em limpar o servidor é aviso, nunca motivo para abandonar os dumps
+    seguintes. Vale para recusa, erro de rede e estouro de tempo igualmente."""
+    try:
+        processo = _ssh(alvo, f"apagar {_argumento(dump.caminho_remoto)}")
+    except FalhaDeSincronizacao as erro:
+        return f"aviso:{erro}"
     if processo.returncode == 0:
         return "apagado"
     if "é o dump mais recente" in motor._erro(processo):

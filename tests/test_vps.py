@@ -116,6 +116,25 @@ class ApagarRemotoTests(unittest.TestCase):
             marca = vps._apagar_remoto(ALVO, self._dump())
         self.assertTrue(marca.startswith("aviso:"))
 
+    def test_estouro_de_tempo_vira_aviso_e_nao_levanta(self) -> None:
+        """A travada de rede que custou a cópia local de três dias: o
+        `apagar` não respondia e a exceção derrubava o projeto inteiro."""
+        with patch.object(vps, "_ssh", side_effect=vps.FalhaDeSincronizacao("não respondeu")):
+            marca = vps._apagar_remoto(ALVO, self._dump())
+        self.assertTrue(marca.startswith("aviso:"))
+
+
+class SshTests(unittest.TestCase):
+    def test_estouro_de_tempo_vira_falha_de_sincronizacao(self) -> None:
+        """`TimeoutExpired` cru sobe até `sincronizar_projeto` e aborta tudo;
+        traduzido, cada chamador decide o que fazer com ele."""
+        with patch.object(
+            motor, "_rodar", side_effect=subprocess.TimeoutExpired(cmd="ssh", timeout=60)
+        ):
+            with self.assertRaises(vps.FalhaDeSincronizacao) as capturado:
+                vps._ssh(ALVO, "apagar x/x_banco_20260819_000000.dump")
+        self.assertIn("60s", str(capturado.exception))
+
 
 class VerificarNoSandboxTests(unittest.TestCase):
     def test_recusa_se_sandbox_nao_existe(self) -> None:
@@ -302,6 +321,55 @@ class SincronizarProjetoTests(unittest.TestCase):
         self.assertEqual(resultado.ja_existentes, 1)
         self.assertEqual(resultado.buscados, 0)
         self.assertEqual(resultado.mantidos, 1)
+        fechar.assert_called_once_with(1, "sucesso")
+
+    def test_apagar_que_nao_responde_nao_impede_os_dumps_seguintes(self) -> None:
+        """A regressão que custou dados: a limpeza do servidor é higiene, a
+        busca é a proteção. Uma falhando não pode levar a outra junto."""
+        nomes = [
+            f"{PROJETO_VPS.slug_servidor}_banco_2026081{n}_000000.dump" for n in (8, 9)
+        ]
+        linhas = "".join(
+            f"{PROJETO_VPS.slug_servidor}/{nome} 10 " + "a" * 64 + "\n" for nome in nomes
+        )
+        listar_proc = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=linhas.encode(), stderr=b""
+        )
+        apagado_proc = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=b"apagado: x\n", stderr=b""
+        )
+        pedidos: list[str] = []
+
+        def _ssh_fake(alvo, comando, **kwargs):
+            if comando == "listar":
+                return listar_proc
+            if comando.startswith("apagar "):
+                pedidos.append(comando)
+                if nomes[0] in comando:
+                    raise vps.FalhaDeSincronizacao("o servidor não respondeu")
+                return apagado_proc
+            raise AssertionError(f"não deveria buscar — os dumps já existem: {comando!r}")
+
+        with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
+            pasta_banco = Path(diretorio, "backups", "projects", PROJETO_VPS.slug, "banco")
+            pasta_banco.mkdir(parents=True)
+            for nome in nomes:
+                (pasta_banco / nome).write_bytes(b"ja-esta-aqui")
+
+            with (
+                patch.object(vps, "_ssh", side_effect=_ssh_fake),
+                patch.object(vps, "_alvo_configurado", return_value=ALVO),
+                patch.object(banco, "abrir_execucao", return_value=1),
+                patch.object(banco, "marcar_fase"),
+                patch.object(banco, "fechar_execucao") as fechar,
+                patch.object(banco, "registrar_evento"),
+            ):
+                resultado = vps.sincronizar_projeto(PROJETO_VPS)
+
+        self.assertEqual(len(pedidos), 2, "o segundo dump nem chegou a ser tentado")
+        self.assertEqual(resultado.ja_existentes, 2)
+        self.assertEqual(resultado.apagados, 1)
+        self.assertEqual(len(resultado.avisos), 1)
         fechar.assert_called_once_with(1, "sucesso")
 
     def test_sem_hash_e_reprovado_sem_tentar_buscar_ou_apagar(self) -> None:

@@ -24,7 +24,9 @@ vivem em `restaurar.py`.
 
 Sobre versões: `pg_dump` e `pg_restore` rodam dentro do contêiner do próprio
 projeto, então a versão da ferramenta é sempre a do servidor. O host não precisa
-ter PostgreSQL instalado — e não tem.
+ter PostgreSQL instalado — e não tem. A exceção é `verificar()`, que confere o
+acervo já gravado e empresta o `pg_restore` do sandbox: o contêiner do projeto
+pode estar parado, e para projeto de origem VPS ele nem existe neste host.
 """
 
 from __future__ import annotations
@@ -47,7 +49,7 @@ from configuracao import (
     caminho_sob_raiz,
     raiz_backup,
 )
-from projetos import Projeto, por_slug
+from projetos import CONTAINER_SANDBOX, Projeto
 
 TEMPO_LIMITE_PADRAO = 3600  # dumps grandes; o maior hoje leva ~1 min
 
@@ -247,15 +249,37 @@ def _estado_git(projeto: Projeto) -> dict:
 # --------------------------------------------------------------------------
 
 
-def verificar_dump(projeto: Projeto, caminho: str) -> None:
+def _reler_dump(container: str, caminho: str) -> None:
+    """A releitura em si, dado o contêiner que empresta o `pg_restore`.
+
+    Quem verifica um dump recém-produzido usa o contêiner do próprio projeto,
+    que acabou de gerá-lo e está de pé. Quem confere o acervo (`verificar`) usa
+    o sandbox: o contêiner do projeto pode não existir — sempre é o caso de
+    projeto de origem VPS, cujo Postgres roda em outra máquina.
+    """
     if os.path.getsize(caminho) == 0:
         raise FalhaDeBackup("dump vazio")
     processo = _rodar(
-        ["docker", "exec", "-i", projeto.container, "pg_restore", "--list"],
+        ["docker", "exec", "-i", container, "pg_restore", "--list"],
         entrada_arquivo=caminho,
     )
     if processo.returncode != 0:
         raise FalhaDeBackup(f"dump não passou em pg_restore --list: {_erro(processo)}")
+
+
+def verificar_dump(projeto: Projeto, caminho: str) -> None:
+    _reler_dump(projeto.container, caminho)
+
+
+def _sandbox_disponivel() -> bool:
+    """Se o sandbox pode emprestar o `pg_restore` agora. Não cria contêiner."""
+    existe, rodando = estado_container(CONTAINER_SANDBOX)
+    if not existe:
+        return False
+    if not rodando:
+        _rodar(["docker", "start", CONTAINER_SANDBOX], tempo_limite=120)
+        _, rodando = estado_container(CONTAINER_SANDBOX)
+    return rodando
 
 
 # --------------------------------------------------------------------------
@@ -465,8 +489,21 @@ def fazer_backup(
 
 def verificar(projeto_slug: str | None = None) -> dict[str, int]:
     """Regra 7: relê os arquivos e confere contra o SHA-256 do catálogo.
-    É o que detecta corrupção silenciosa no destino."""
-    contagem = {"conferidos": 0, "ausentes": 0, "corrompidos": 0}
+    É o que detecta corrupção silenciosa no destino.
+
+    Duas garantias sobre o veredito, aprendidas caro: a releitura dos dumps
+    acontece no **sandbox**, não no contêiner do projeto — que pode não existir,
+    e nunca existe para projeto de origem VPS —; e, se o sandbox não estiver
+    disponível, nenhum dump é julgado. `nao_verificados` conta esses, e a
+    situação de cada um fica como estava.
+
+    O contrário disso gravou `corrompido` em 90 artefatos íntegros de uma vez.
+    Não é rótulo cosmético: `aplicar_retencao` conta artefatos válidos, então um
+    dump marcado assim some da retenção, e a regra 3 passa a decidir sobre um
+    acervo que não corresponde ao disco.
+    """
+    contagem = {"conferidos": 0, "ausentes": 0, "corrompidos": 0, "nao_verificados": 0}
+    sandbox: bool | None = None  # decidido na primeira vez que um dump aparecer
     for linha in banco.listar_artefatos(projeto_slug, limite=10000):
         if linha["situacao"] not in ("valido", "corrompido", "ausente"):
             continue
@@ -484,13 +521,18 @@ def verificar(projeto_slug: str | None = None) -> dict[str, int]:
             banco.marcar_situacao_artefato(linha["id"], "corrompido")
             contagem["corrompidos"] += 1
             continue
+        if linha["tipo"] == "banco":
+            if sandbox is None:
+                sandbox = _sandbox_disponivel()
+            if not sandbox:
+                contagem["nao_verificados"] += 1
+                continue
         try:
-            projeto = por_slug(linha["projeto"])
             if linha["tipo"] == "banco":
-                verificar_dump(projeto, caminho)
+                _reler_dump(CONTAINER_SANDBOX, caminho)
             elif linha["tipo"] == "codigo":
                 verificar_zip_codigo(caminho)
-        except (FalhaDeBackup, KeyError):
+        except FalhaDeBackup:
             banco.marcar_situacao_artefato(linha["id"], "corrompido")
             contagem["corrompidos"] += 1
             continue

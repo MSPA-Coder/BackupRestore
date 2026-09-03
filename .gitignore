@@ -4,3 +4,4 @@ catalogo.sqlite3
 catalogo.sqlite3-shm
 catalogo.sqlite3-wal
 __pycache__/
+ultima-execucao.txt

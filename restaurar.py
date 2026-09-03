@@ -30,6 +30,15 @@ class RestauracaoRecusada(RuntimeError):
     """Uma das travas barrou a operação. Nada foi escrito."""
 
 
+class OrigemIndisponivel(RuntimeError):
+    """Não dá para ler a origem agora — e isso não diz nada sobre o artefato.
+
+    A comparação do ensaio é a segunda pergunta ("bate com a origem?"); a
+    primeira ("este dump restaura?") já foi respondida quando isto acontece.
+    Separar as duas evita que uma stack parada pareça um artefato ruim.
+    """
+
+
 def _literal_sql(valor: str) -> str:
     """Representa texto como literal PostgreSQL sem permitir injeção."""
     if "\x00" in valor:
@@ -253,7 +262,10 @@ def comparar_com_origem(projeto: Projeto, container_destino: str, usuario_destin
         )
     existe, rodando = motor.estado_container(projeto.container)
     if not existe:
-        raise RuntimeError(f"contêiner de origem {projeto.container} não existe")
+        raise OrigemIndisponivel(
+            f"contêiner de origem {projeto.container} não existe — suba a stack do "
+            f"projeto para comparar"
+        )
     try:
         if not rodando:
             motor._rodar(["docker", "start", projeto.container], tempo_limite=120)

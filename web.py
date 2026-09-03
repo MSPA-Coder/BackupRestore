@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import threading
 
+from datetime import datetime
 from urllib.parse import urlsplit
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
@@ -26,10 +27,31 @@ import banco
 import motor
 import restaurar as restauracao
 from configuracao import alvo_vps, raiz_backup, raiz_permitida
-from projetos import CONTAINER_SANDBOX, PROJETOS, RAIZ_PROJETOS, por_slug
+from projetos import (
+    AMBIENTE_LOCAL,
+    AMBIENTE_VPS,
+    CONTAINER_SANDBOX,
+    PROJETOS,
+    RAIZ_PROJETOS,
+    por_slug,
+)
 
 USUARIO_SANDBOX = "sandbox"
 ROTULOS = {"banco": "Banco de dados", "codigo": "Código"}
+
+# A tarefa agendada roda todo dia. Dois dias sem nenhuma execução no catálogo
+# não é falha registrada — é ausência de registro, que foi exatamente como uma
+# tarefa desabilitada passou despercebida. Dois dias em vez de um para não
+# alarmar por um único atraso (host desligado numa noite).
+DIAS_DE_SILENCIO_ATE_ALERTAR = 2
+
+# A tarefa agendada faz duas coisas: sincroniza os projetos de origem VPS e faz
+# backup dos locais. Uma falha em qualquer outro par projeto/operação veio de
+# uma chamada manual — inclusive as recusas de `backup` num projeto de origem
+# VPS, que o motor rejeita por projeto. Nada as repetirá, então elas nunca
+# sairiam do destaque sozinhas; e um alerta que não some é um alerta que se
+# aprende a ignorar.
+OPERACAO_DO_AGENDAMENTO = {AMBIENTE_LOCAL: "backup", AMBIENTE_VPS: "sincronizacao"}
 
 app = Flask(__name__)
 
@@ -115,16 +137,44 @@ def filtro_momento(texto: str | None) -> str:
 # --------------------------------------------------------------------------
 
 
+def _falhas_do_agendamento() -> list:
+    """Só o que a tarefa diária repete — e que, portanto, pode se resolver."""
+    automaticas = {
+        (projeto.slug, OPERACAO_DO_AGENDAMENTO.get(projeto.ambiente))
+        for projeto in PROJETOS
+    }
+    return [
+        falha for falha in banco.falhas_atuais()
+        if (falha["projeto"], falha["operacao"]) in automaticas
+    ]
+
+
+def _dias_desde(momento: str | None) -> int | None:
+    if not momento:
+        return None
+    try:
+        return (datetime.now() - datetime.fromisoformat(momento)).days
+    except ValueError:
+        return None
+
+
 @app.get("/")
 def painel():
     resumos = {p.slug: banco.resumo_projeto(p.slug) for p in PROJETOS}
     artefatos = [a for a in banco.listar_artefatos(limite=1000) if a["tipo"] in ROTULOS]
     problemas = [a for a in artefatos if a["situacao"] in ("corrompido", "ausente")]
     execucoes = banco.listar_execucoes(limite=20)
+    # O que está falhando *agora* — não o histórico. Fica no topo do painel
+    # porque o código de saída da tarefa agendada não chega a lugar nenhum.
+    falhas = _falhas_do_agendamento()
+    dias_sem_execucao = _dias_desde(banco.momento_ultima_execucao())
     return render_template(
         "painel.html",
         projetos=PROJETOS,
         resumos=resumos,
+        falhas=falhas,
+        dias_sem_execucao=dias_sem_execucao,
+        silencio=dias_sem_execucao is None or dias_sem_execucao >= DIAS_DE_SILENCIO_ATE_ALERTAR,
         total_artefatos=len([a for a in artefatos if a["situacao"] == "valido"]),
         total_bytes=sum(a["bytes"] for a in artefatos if a["situacao"] == "valido"),
         problemas=problemas,
