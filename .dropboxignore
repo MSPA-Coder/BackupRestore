@@ -1,0 +1,65 @@
+# Arquivos que nunca devem ocupar espaco nem gerar trafego de sincronizacao no
+# Dropbox. Cobre o que e reconstruivel localmente (ambientes virtuais, caches,
+# artefatos de build) e o que e sensivel (configuracao local, catalogo).
+#
+# Este projeto guarda estado local proprio (`catalogo.sqlite3`,
+# `configuracao.local.json`, `agendamento.local.json`). Eles ficam fora do
+# Dropbox: sao especificos desta maquina e o catalogo e um SQLite, que
+# sincroniza mal.
+
+.git/
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# Caches de ferramentas
+__pycache__/
+*.pyc
+*.pyo
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Artefatos de build
+build/
+dist/
+*.egg
+*.egg-info/
+
+# Estado local desta maquina
+catalogo.sqlite3
+catalogo.sqlite3-shm
+catalogo.sqlite3-wal
+configuracao.local.json
+agendamento.local.json
+ultima-execucao.txt
+
+# Segredos e certificados
+.env
+.secrets/
+.certs/
+
+# Ferramentas de agente
+.codex/
+.agents/
+.claude/
+*.mdc
+
+# Editor e sistema operacional
+.idea/
+*.code-workspace
+*.swp
+*.swo
+.dropbox
+.dropbox.cache/
+.dropbox.attr
+
+# Temporarios
+*.log
+*.tmp
+*.bak
+*.orig
