@@ -1,7 +1,84 @@
-configuracao.local.json
-agendamento.local.json
+# ---------------------------------------------------------------------------
+# Nucleo comum aos projetos irmaos. Mantenha esta secao em sincronia; o que for
+# especifico deste projeto vai no fim do arquivo.
+# ---------------------------------------------------------------------------
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# Caches de ferramentas
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Empacotamento
+build/
+dist/
+*.egg
+*.egg-info/
+
+# Segredos e certificados
+.env
+.env.*
+!.env.example
+.certs/
+.secrets/
+
+# Dados locais: nunca versionados, nem mesmo vazios
+backups/
+instance/
+logs/*
+!logs/.gitkeep
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Ferramentas de agente
+.codex/
+.agents/
+.claude/
+
+# Editor: a configuracao compartilhada e versionada, o resto nao
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# ---------------------------------------------------------------------------
+# Especifico do BackupRestore
+# ---------------------------------------------------------------------------
+
+# Estado local desta maquina. O catalogo ja e coberto por `*.sqlite3` acima,
+# mas fica explicito aqui junto dos arquivos WAL do SQLite.
 catalogo.sqlite3
 catalogo.sqlite3-shm
 catalogo.sqlite3-wal
-__pycache__/
+configuracao.local.json
+agendamento.local.json
 ultima-execucao.txt
