@@ -99,7 +99,7 @@ class VerificarTests(unittest.TestCase):
         self.assertIn(CONTAINER_SANDBOX, comandos[0])
         self.assertNotIn("mega-sena-postgres-1", comandos[0])
 
-    def test_dump_que_nao_relê_com_sandbox_de_pe_e_corrompido(self) -> None:
+    def test_dump_que_nao_rele_com_sandbox_de_pe_e_corrompido(self) -> None:
         def _reler(comando, **kwargs):
             return subprocess.CompletedProcess(
                 args=[], returncode=1, stdout=b"", stderr=b"nao e um dump\n"
