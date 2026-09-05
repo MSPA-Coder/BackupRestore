@@ -30,10 +30,3 @@
 *.gz binary
 *.xls binary
 *.xlsx binary
-
-# `iniciar.bat` roda no cmd.exe, que le o arquivo de lote por posicao de byte
-# enquanto ja o executa: com LF, rotulos e `goto` podem saltar para o lugar
-# errado e o erro aparece longe da causa. Este e o unico arquivo do
-# repositorio que quer CRLF, e a excecao vale mais que o risco.
-*.bat text eol=crlf
-*.cmd text eol=crlf
