@@ -12,26 +12,29 @@ arquivos operacionais nem os segredos provisionados.
 
 | Projeto | Arquivos externos esperados |
 |---|---|
-| `ControleBancario` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/github_token.txt`; `.certs/local-root-ca.crt` |
-| `ControleRendaVariavel` | `.env`; `.secrets/postgres_password`, `.secrets/secret_key`, `.secrets/collector_agent_token`, `.secrets/github_token.txt`; `.certs/local-root-ca.crt`; se o agente RTD estiver instalado, `.docker-local/remote-collector.env` |
-| `MegaSena` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`, `.secrets/github_token.txt`; `.certs/local-root-ca.crt` |
-| `ConfortoTermico` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`, `.secrets/github_token.txt`; `.certs/local-root-ca.crt` |
+| `ControleBancario` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
+| `ControleRendaVariavel` | `.env`; `.secrets/postgres_password`, `.secrets/secret_key`, `.secrets/collector_agent_token`; `.certs/local-root-ca.crt`; se o agente RTD estiver instalado, `.docker-local/remote-collector.env` |
+| `MegaSena` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
+| `ConfortoTermico` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
+| `MpPortal` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
 
 Confira sempre o README e o `compose.yaml` da versao restaurada: esse inventario
 descreve o estado atual, nao substitui a configuracao versionada.
 
 ## VPS (producao)
 
-Os arquivos abaixo vivem só no servidor, fora do Git — a Camada 2 do backup
+Os arquivos abaixo vivem só nos servidores, fora do Git — a Camada 2 do backup
 (`vps.py`) **nunca os toca**. Copiar para o cofre continua sendo tarefa manual,
-a mesma dos locais.
+a mesma dos locais. Os quatro primeiros ficam no VPS compartilhado; o portal,
+num VPS dedicado.
 
 | Projeto (no VPS) | Fora do Git, indispensável |
 |---|---|
-| `controle-bancario` | `.env.vps`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/github_token.txt`; `.certs/local-root-ca.crt` |
-| `controle-renda-variavel` | `.env.vps`; `.secrets/postgres_password`, `.secrets/secret_key`, `.secrets/collector_agent_token`, `.secrets/github_token.txt`; `.certs/local-root-ca.crt` |
-| `mega-sena` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`, `.secrets/github_token.txt`; `.certs/local-root-ca.crt` |
-| `conforto-termico` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`, `.secrets/github_token.txt`; `.certs/local-root-ca.crt` |
+| `controle-bancario` | `.env.vps`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
+| `controle-renda-variavel` | `.env.vps`; `.secrets/postgres_password`, `.secrets/secret_key`, `.secrets/collector_agent_token`; `.certs/local-root-ca.crt` |
+| `mega-sena` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
+| `conforto-termico` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
+| `mp-portal` (VPS dedicado) | `.env.vps`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
 
 Não é o mesmo inventário dos locais acima. Confirme os nomes contra a
 configuração da versão restaurada antes de cada ensaio.
