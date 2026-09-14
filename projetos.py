@@ -1,6 +1,6 @@
 """Os projetos cobertos pelo backup, e onde tudo mora.
 
-Fonte de verdade em Python, não no banco: são quatro projetos que mudam de ano
+Fonte de verdade em Python, não no banco: são poucos projetos, que mudam de ano
 em ano. Uma tabela editável pela interface custaria CRUD, validação e telas para
 resolver um problema que uma lista resolve.
 
@@ -12,6 +12,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from configuracao import SERVIDOR_PRINCIPAL
 
 VARIAVEL_RAIZ_PROJETOS = "BACKUPRESTORE_RAIZ_PROJETOS"
 
@@ -58,6 +60,12 @@ AMBIENTE_VPS = "vps"
 # dias que o servidor guarda por conta própria.
 RETENCAO_VPS = 14
 
+# Nome do alvo SSH de onde um projeto `ambiente="vps"` é buscado. Cada nome
+# corresponde a um alvo gravado por `cli.py configurar-vps --servidor <nome>`.
+# O portal roda num VPS dedicado desde 13/09/2026; os outros quatro seguem no
+# servidor principal.
+SERVIDOR_PORTAL = "portal"
+
 
 @dataclass(frozen=True)
 class Projeto:
@@ -70,6 +78,7 @@ class Projeto:
     ambiente: str = AMBIENTE_LOCAL
     retencao: int = RETENCAO_PADRAO
     tipos: tuple[str, ...] = field(default=("banco", "codigo"))
+    servidor: str = SERVIDOR_PRINCIPAL
 
     @property
     def caminho(self) -> str:
@@ -178,6 +187,19 @@ PROJETOS: tuple[Projeto, ...] = (
         ambiente=AMBIENTE_VPS,
         retencao=RETENCAO_VPS,
         tipos=("banco",),
+    ),
+    # Mesmo agente restrito e mesmo formato de dump; muda só o alvo SSH.
+    Projeto(
+        slug="mp_portal_vps",
+        nome="MP Portal (VPS)",
+        pasta="",
+        container="mp-portal-postgres-1",
+        usuario="mp_portal",
+        banco="mp_portal",
+        ambiente=AMBIENTE_VPS,
+        retencao=RETENCAO_VPS,
+        tipos=("banco",),
+        servidor=SERVIDOR_PORTAL,
     ),
 )
 

@@ -285,6 +285,32 @@ class SincronizarProjetoTests(unittest.TestCase):
                 vps.sincronizar_projeto(PROJETO_VPS)
         fechar.assert_called_once_with(999, "falha", "VPS não configurado")
 
+    def test_cada_projeto_busca_no_proprio_servidor(self) -> None:
+        # O portal roda noutro VPS: sincronizar tem de pedir o alvo do servidor
+        # do projeto, e não sempre o principal.
+        portal = next(p for p in PROJETOS if p.slug == "mp_portal_vps")
+        vazio = subprocess.CompletedProcess(args=[], returncode=0, stdout=b"", stderr=b"")
+        for projeto in (PROJETO_VPS, portal):
+            with (
+                self.subTest(projeto=projeto.slug),
+                patch.object(banco, "abrir_execucao", return_value=999),
+                patch.object(banco, "fechar_execucao"),
+                patch.object(banco, "registrar_evento"),
+                patch.object(banco, "marcar_fase"),
+                patch.object(vps, "_alvo_configurado", return_value=ALVO) as alvo_configurado,
+                patch.object(vps, "_ssh", return_value=vazio),
+            ):
+                vps.sincronizar_projeto(projeto)
+                alvo_configurado.assert_called_once_with(projeto.servidor)
+        self.assertEqual(PROJETO_VPS.servidor, "principal")
+        self.assertEqual(portal.servidor, "portal")
+
+    def test_servidor_nao_configurado_diz_como_configurar(self) -> None:
+        with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
+            with self.assertRaises(vps.FalhaDeSincronizacao) as contexto:
+                vps._alvo_configurado("portal")
+        self.assertIn("--servidor portal", str(contexto.exception))
+
     def test_dump_ja_existente_pula_busca_mas_tenta_apagar(self) -> None:
         nome = f"{PROJETO_VPS.slug_servidor}_banco_20260819_000000.dump"
         linha = f"{PROJETO_VPS.slug_servidor}/{nome} 10 " + "a" * 64

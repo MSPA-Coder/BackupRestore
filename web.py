@@ -26,7 +26,7 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, url
 import banco
 import motor
 import restaurar as restauracao
-from configuracao import alvo_vps, raiz_backup, raiz_permitida
+from configuracao import raiz_backup, raiz_permitida, servidores_vps
 from projetos import (
     AMBIENTE_LOCAL,
     AMBIENTE_VPS,
@@ -280,7 +280,7 @@ def configuracoes():
         raiz_projetos=RAIZ_PROJETOS,
         espaco_livre=motor.espaco_livre(),
         # Só leitura: quem escreve é `cli.py configurar-vps`.
-        vps=alvo_vps(),
+        servidores=servidores_vps(),
     )
 
 

@@ -152,11 +152,14 @@ def comando_sincronizar_vps(args: argparse.Namespace) -> int:
 def comando_configurar_vps(args: argparse.Namespace) -> int:
     """Única via de escrita do alvo SSH do VPS: operador no host."""
     try:
-        alvo = configurar_vps(args.host, args.usuario, args.chave)
+        alvo = configurar_vps(args.host, args.usuario, args.chave, args.servidor)
     except ConfiguracaoInvalida as erro:
         print(f"Configuração recusada: {erro}", file=sys.stderr)
         return 2
-    print(f"VPS configurado: {alvo['usuario']}@{alvo['host']}  (chave: {alvo['chave']})")
+    print(
+        f"Servidor {args.servidor!r} configurado: {alvo['usuario']}@{alvo['host']}  "
+        f"(chave: {alvo['chave']})"
+    )
     return 0
 
 
@@ -319,6 +322,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("host", help="endereço ou apelido SSH do VPS")
     p.add_argument("--usuario", default="ubuntu")
     p.add_argument("--chave", required=True, help="caminho da chave SSH dedicada do agente")
+    p.add_argument(
+        "--servidor",
+        default="principal",
+        help="nome do servidor, o mesmo do campo `servidor` em projetos.py (padrão: principal)",
+    )
     p.set_defaults(funcao=comando_configurar_vps)
 
     p = sub.add_parser("restaurar", help="restaura um dump somente no sandbox descartável")

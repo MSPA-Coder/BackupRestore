@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 
 import banco
 import motor
-from configuracao import alvo_vps, caminho_sob_raiz
+from configuracao import SERVIDOR_PRINCIPAL, alvo_vps, caminho_sob_raiz
 from projetos import AMBIENTE_VPS, CONTAINER_SANDBOX, Projeto
 
 TEMPO_LIMITE_COMANDO = 60
@@ -178,11 +178,13 @@ def _ssh(alvo: dict[str, str], comando: str, *, saida_arquivo: str | None = None
         ) from None
 
 
-def _alvo_configurado() -> dict[str, str]:
-    alvo = alvo_vps()
+def _alvo_configurado(servidor: str) -> dict[str, str]:
+    alvo = alvo_vps(servidor)
     if alvo is None:
+        opcao = "" if servidor == SERVIDOR_PRINCIPAL else f" --servidor {servidor}"
         raise FalhaDeSincronizacao(
-            "VPS não configurado — rode: python cli.py configurar-vps <host> --chave <caminho>"
+            f"servidor {servidor!r} não configurado — rode: "
+            f"python cli.py configurar-vps <host>{opcao} --chave <caminho>"
         )
     return alvo
 
@@ -291,7 +293,7 @@ def sincronizar_projeto(projeto: Projeto, execucao_id: int | None = None) -> Res
 
     resultado = ResultadoSincronizacao()
     try:
-        alvo = _alvo_configurado()
+        alvo = _alvo_configurado(projeto.servidor)
         banco.marcar_fase(execucao_id, "Consultando o servidor", 5)
         remotos = [d for d in listar_remoto(alvo) if d.slug_servidor == projeto.slug_servidor]
 
