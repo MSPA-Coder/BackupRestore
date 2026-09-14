@@ -3,19 +3,20 @@
 ## Papel e fontes de verdade
 
 BackupRestore roda no host Windows e coordena backup e ensaio de restauracao dos
-quatro projetos web locais, alem de buscar e catalogar os dumps que o VPS
-produz sozinho (Camada 2 do backup de producao). Ele nao e containerizado
+quatro projetos web locais, alem de buscar e catalogar os dumps que os dois
+VPS produzem sozinhos (Camada 2 do backup de producao). Ele nao e containerizado
 porque isso exigiria conceder a um container acesso privilegiado ao daemon
 Docker.
 
 - `README.md`: instalacao, operacao e formato dos artefatos.
 - `RESTAURAR.md`: recuperacao manual e limites do backup.
-- `projetos.py`: os oito projetos (quatro locais, quatro de origem VPS, campo
-  `ambiente`) e os containers protegidos.
+- `projetos.py`: os nove projetos (quatro locais e cinco de origem VPS, campos
+  `ambiente` e `servidor`) e os containers protegidos.
 - `motor.py` e `restaurar.py`: contratos de integridade e restauracao dos
   projetos locais.
-- `vps.py`: Camada 2 — busca, verifica e cataloga dumps do VPS por SSH via um
-  agente restrito no servidor (`listar`/`enviar`/`apagar`/`estado`); nunca
+- `vps.py`: Camada 2 — busca, verifica e cataloga dumps dos VPS por SSH (um
+  alvo por servidor, gravado por `cli.py configurar-vps`) via um agente
+  restrito no servidor (`listar`/`enviar`/`apagar`/`estado`); nunca
   dispara `pg_dump` remoto nem toca em container de producao.
 
 Confirme o comportamento no codigo antes de alterar documentacao. Pedido atual

@@ -29,12 +29,13 @@ Cada artefato tem um `.manifest.json` ao lado com SHA-256, tamanho e origem.
 Os `<projeto>` locais são `conforto_termico`, `mega_sena`, `controle_bancario`
 e `controle_renda_variavel`.
 
-**Os quatro projetos `_vps` são a mesma coisa, com uma diferença:** o dump vem
+**Os projetos `_vps` são a mesma coisa, com uma diferença:** o dump vem
 do VPS, buscado e verificado pela Camada 2 (`vps.py`/`cli.py sincronizar-vps`)
 — não existe pasta `codigo\` para eles, porque o código do VPS é espelho do
 `main` no GitHub (não um artefato deste sistema; ver "Reconstrução completa"
 abaixo). `<projeto>` vira `conforto_termico_vps`, `mega_sena_vps`,
-`controle_bancario_vps` e `controle_renda_variavel_vps`. O `.manifest.json` de
+`controle_bancario_vps`, `controle_renda_variavel_vps` e `mp_portal_vps` — este
+último vem do VPS dedicado do portal. O `.manifest.json` de
 um dump VPS tem `"origem": {"servidor": ..., "arquivo_remoto": ...}` em vez de
 `{"container": ..., "banco": ...}` — é assim que se distingue um artefato
 produzido aqui de um buscado de lá.
@@ -65,8 +66,8 @@ ser configurados conscientemente no destino antes do próximo passo.
 docker compose up -d <servico-postgres>
 ```
 
-O serviço se chama `postgres` em Controle Bancário, Mega-Sena e Conforto
-Térmico, e `db` em Controle de Renda Variável.
+O serviço se chama `postgres` em Controle Bancário, Mega-Sena, Conforto
+Térmico e MP Portal, e `db` em Controle de Renda Variável.
 
 Antes do resto: se a aplicação subir junto, as migrações criam um esquema vazio
 que o `pg_restore` vai derrubar em seguida. Funciona, mas restaurar sobre banco

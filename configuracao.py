@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -137,26 +138,65 @@ def configurar_raiz_backup(caminho: str, *, permitida: str | None = None) -> str
 
 _CAMPOS_VPS = ("host", "usuario", "chave")
 
+# O servidor que existia antes de haver um segundo. Continua gravado na chave
+# `vps` do arquivo local, onde sempre esteve, para que a configuração já feita
+# siga válida sem migração; os demais ficam em `servidores`, por nome.
+SERVIDOR_PRINCIPAL = "principal"
+_NOME_SERVIDOR = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 
-def alvo_vps() -> dict[str, str] | None:
-    """Host, usuário e caminho da chave SSH dedicada da Camada 2, ou ``None``
-    se ainda não configurado. Somente leitura para a interface web."""
-    dados = _ler()
-    vps = dados.get("vps")
-    if not isinstance(vps, dict) or not all(vps.get(campo) for campo in _CAMPOS_VPS):
+
+def _alvo_valido(bruto: object) -> dict[str, str] | None:
+    if not isinstance(bruto, dict) or not all(bruto.get(campo) for campo in _CAMPOS_VPS):
         return None
-    return {campo: str(vps[campo]) for campo in _CAMPOS_VPS}
+    return {campo: str(bruto[campo]) for campo in _CAMPOS_VPS}
 
 
-def configurar_vps(host: str, usuario: str, chave: str) -> dict[str, str]:
-    """Persiste o alvo SSH do VPS. Única via de escrita: o comando local do
-    operador (``cli.py configurar-vps``) — a mesma regra da raiz de backup, e
-    pelo mesmo motivo: a interface em 127.0.0.1 não decide o que este host
-    acessa pela rede.
+def alvo_vps(servidor: str = SERVIDOR_PRINCIPAL) -> dict[str, str] | None:
+    """Host, usuário e caminho da chave SSH dedicada da Camada 2 para um
+    servidor, ou ``None`` se ele ainda não foi configurado. Somente leitura
+    para a interface web."""
+    dados = _ler()
+    if servidor == SERVIDOR_PRINCIPAL:
+        return _alvo_valido(dados.get("vps"))
+    servidores = dados.get("servidores")
+    if not isinstance(servidores, dict):
+        return None
+    return _alvo_valido(servidores.get(servidor))
+
+
+def servidores_vps() -> dict[str, dict[str, str]]:
+    """Todos os alvos configurados, por nome, o principal primeiro."""
+    dados = _ler()
+    alvos: dict[str, dict[str, str]] = {}
+    principal = _alvo_valido(dados.get("vps"))
+    if principal:
+        alvos[SERVIDOR_PRINCIPAL] = principal
+    servidores = dados.get("servidores")
+    if isinstance(servidores, dict):
+        for nome in sorted(servidores):
+            alvo = _alvo_valido(servidores[nome])
+            if alvo and nome != SERVIDOR_PRINCIPAL:
+                alvos[str(nome)] = alvo
+    return alvos
+
+
+def configurar_vps(
+    host: str, usuario: str, chave: str, servidor: str = SERVIDOR_PRINCIPAL
+) -> dict[str, str]:
+    """Persiste o alvo SSH de um servidor. Única via de escrita: o comando
+    local do operador (``cli.py configurar-vps``) — a mesma regra da raiz de
+    backup, e pelo mesmo motivo: a interface em 127.0.0.1 não decide o que
+    este host acessa pela rede.
     """
+    servidor = servidor.strip()
     host = host.strip()
     usuario = usuario.strip()
     chave = os.path.expanduser(os.path.expandvars(chave.strip()))
+    if not _NOME_SERVIDOR.match(servidor):
+        raise ConfiguracaoInvalida(
+            "nome de servidor inválido: comece por letra minúscula e use só "
+            "letras minúsculas, dígitos, _ ou -"
+        )
     if not host:
         raise ConfiguracaoInvalida("informe o host do VPS")
     if not usuario:
@@ -167,12 +207,20 @@ def configurar_vps(host: str, usuario: str, chave: str) -> dict[str, str]:
         raise ConfiguracaoInvalida(f"chave SSH não encontrada: {chave}")
 
     dados = _ler()
-    dados["vps"] = {"host": host, "usuario": usuario, "chave": chave}
+    alvo = {"host": host, "usuario": usuario, "chave": chave}
+    if servidor == SERVIDOR_PRINCIPAL:
+        dados["vps"] = alvo
+    else:
+        servidores = dados.get("servidores")
+        if not isinstance(servidores, dict):
+            servidores = {}
+        servidores[servidor] = alvo
+        dados["servidores"] = servidores
     temporario = ARQUIVO_CONFIGURACAO + ".tmp"
     with open(temporario, "w", encoding="utf-8") as arquivo:
         json.dump(dados, arquivo, indent=2, ensure_ascii=False)
     os.replace(temporario, ARQUIVO_CONFIGURACAO)
-    return dict(dados["vps"])
+    return dict(alvo)
 
 
 def caminho_catalogo(caminho_relativo: str) -> str:

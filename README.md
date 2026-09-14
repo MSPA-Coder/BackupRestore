@@ -2,7 +2,7 @@
 
 Backup dos projetos locais e ensaio de restauração em sandbox: dump PostgreSQL
 e ZIP de código por projeto, com verificação de integridade. Também busca,
-verifica e cataloga os dumps que o VPS de produção já produz sozinho
+verifica e cataloga os dumps que os VPS de produção já produzem sozinhos
 (Camada 2 do backup de produção) — nunca dispara `pg_dump` remoto nem toca em
 contêiner de produção.
 
@@ -33,7 +33,7 @@ Pela linha de comando:
 
 ```bash
 python cli.py backup --todos          # o que o Agendador chama (só os projetos locais)
-python cli.py sincronizar-vps --todos # Camada 2: busca, verifica e cataloga os dumps do VPS
+python cli.py sincronizar-vps --todos # Camada 2: busca, verifica e cataloga os dumps dos VPS
 python cli.py listar                  # catálogo
 python cli.py verificar               # relê os arquivos e confere SHA-256
 python cli.py ensaio --projeto mega_sena   # restaura no sandbox e compara com a origem
@@ -41,14 +41,22 @@ python web.py                         # interface em http://127.0.0.1:5401
 ```
 
 Os quatro projetos locais produzem o próprio backup (contêiner Docker). Os
-quatro projetos `_vps` não — a produção acontece sozinha no servidor
+cinco projetos `_vps` não — a produção acontece sozinha em cada servidor
 (`_manutencao/vps/backup-db.sh`, systemd timer) e o `sincronizar-vps` só
 busca, verifica e cataloga o que já existe lá, pelo agente restrito
-(`_manutencao/vps/backup-agent.sh`). Configure o alvo uma vez com:
+(`_manutencao/vps/backup-agent.sh`).
+
+São dois servidores: o principal, com os quatro aplicativos, e o do portal
+(`mp_portal_vps`). O campo `servidor` de cada projeto em `projetos.py` diz de
+qual deles o dump vem. Configure cada alvo uma vez:
 
 ```powershell
 python cli.py configurar-vps <host> --usuario ubuntu --chave 'C:\caminho\da\chave-dedicada'
+python cli.py configurar-vps <host-do-portal> --servidor portal --chave 'C:\caminho\da\chave-dedicada'
 ```
+
+A mesma chave dedicada pode servir aos dois servidores: em cada um ela entra no
+`authorized_keys` presa por `command=` ao agente.
 
 O agente do servidor só sabe quatro verbos (`listar`, `enviar`, `apagar`,
 `estado`) — este cliente nunca dispara `pg_dump` remoto nem toca em contêiner
@@ -132,7 +140,7 @@ Dois artefatos por projeto, em `<raiz-configurada>\projects\<projeto>\`:
 Cada um com `.manifest.json` ao lado (SHA-256, tamanho, origem, e para código o
 `HEAD` e se havia trabalho não commitado).
 
-**Os quatro projetos `_vps` só têm `banco/*.dump`** — sem `codigo/`, porque o
+**Os projetos `_vps` só têm `banco/*.dump`** — sem `codigo/`, porque o
 código de produção não é um artefato deste sistema (ver seção "Agendamento" e
 [RESTAURAR.md](RESTAURAR.md)). O `.manifest.json` desses dumps registra o
 servidor de origem em vez de um contêiner local, e o carimbo de tempo é
@@ -275,7 +283,7 @@ quando o Agendador de Tarefas chama o `ssh.exe` real do Windows.
 ## Arquivos
 
 ```
-projetos.py     os 8 projetos (4 locais + 4 de origem VPS) e o sandbox autorizado
+projetos.py     os 9 projetos (4 locais + 5 de origem VPS, em 2 servidores) e o sandbox autorizado
 banco.py        catálogo SQLite (3 tabelas, sem ORM, sem migrações)
 motor.py        produção e verificação dos artefatos locais — o núcleo
 restaurar.py    travas, dump de segurança e pg_restore

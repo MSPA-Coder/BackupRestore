@@ -385,6 +385,39 @@ class VpsTargetConfigTests(unittest.TestCase):
         self.assertEqual(dados["raiz_backup"], "D:/Backups/BackupRestore")
         self.assertEqual(dados["vps"]["host"], "163.176.214.214")
 
+    def test_named_server_is_stored_apart_from_principal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            chave = Path(directory, "chave.key")
+            chave.write_text("fake")
+            arquivo = Path(directory, "config.json")
+            with patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(arquivo)):
+                configuracao.configurar_vps("vps1.exemplo", "ubuntu", str(chave))
+                configuracao.configurar_vps("vps2.exemplo", "ubuntu", str(chave), servidor="portal")
+                principal = configuracao.alvo_vps()
+                portal = configuracao.alvo_vps("portal")
+                todos = configuracao.servidores_vps()
+                dados = json.loads(arquivo.read_text())
+        # O principal continua na chave `vps`: a configuração gravada antes de
+        # existir um segundo servidor é lida sem migração.
+        self.assertEqual(dados["vps"]["host"], "vps1.exemplo")
+        self.assertEqual(principal["host"], "vps1.exemplo")
+        self.assertEqual(portal["host"], "vps2.exemplo")
+        self.assertEqual(list(todos), ["principal", "portal"])
+
+    def test_unconfigured_named_server_is_none(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(Path(directory, "config.json"))):
+                self.assertIsNone(configuracao.alvo_vps("portal"))
+
+    def test_invalid_server_name_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            chave = Path(directory, "chave.key")
+            chave.write_text("fake")
+            with patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(Path(directory, "config.json"))):
+                for nome in ("", "../fora", "Portal", "com espaco"):
+                    with self.subTest(nome=nome), self.assertRaises(configuracao.ConfiguracaoInvalida):
+                        configuracao.configurar_vps("h.exemplo", "ubuntu", str(chave), servidor=nome)
+
 
 class EnsaioVpsTests(unittest.TestCase):
     def test_ensaio_de_projeto_vps_pula_comparacao_com_origem(self) -> None:
