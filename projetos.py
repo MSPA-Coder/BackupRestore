@@ -62,7 +62,7 @@ RETENCAO_VPS = 14
 
 # Nome do alvo SSH de onde um projeto `ambiente="vps"` é buscado. Cada nome
 # corresponde a um alvo gravado por `cli.py configurar-vps --servidor <nome>`.
-# O portal roda num VPS dedicado desde 13/09/2026; os outros quatro seguem no
+# O portal roda num VPS dedicado desde 13/09/2026; os outros cinco seguem no
 # servidor principal.
 SERVIDOR_PORTAL = "portal"
 
@@ -137,6 +137,16 @@ PROJETOS: tuple[Projeto, ...] = (
         usuario="investimentos",
         banco="investimentos",
     ),
+    # Consolidador de patrimônio (17/09/2026). Só lê os outros dois; o banco
+    # dele guarda o login, a série de câmbio e, mais adiante, a foto diária.
+    Projeto(
+        slug="networth",
+        nome="NetWorth",
+        pasta="NetWorth",
+        container="networth-postgres-1",
+        usuario="networth",
+        banco="networth",
+    ),
     # Projetos de produção no VPS, sincronizados pela Camada 2. Mesmos
     # apelidos de contêiner, usuário e banco dos originais — são os nomes reais
     # do lado de lá — mas em `ambiente="vps"`, sem pasta local e sem tipo
@@ -184,6 +194,17 @@ PROJETOS: tuple[Projeto, ...] = (
         container="controle-renda-variavel-db-1",
         usuario="investimentos",
         banco="investimentos",
+        ambiente=AMBIENTE_VPS,
+        retencao=RETENCAO_VPS,
+        tipos=("banco",),
+    ),
+    Projeto(
+        slug="networth_vps",
+        nome="NetWorth (VPS)",
+        pasta="",
+        container="networth-postgres-1",
+        usuario="networth",
+        banco="networth",
         ambiente=AMBIENTE_VPS,
         retencao=RETENCAO_VPS,
         tipos=("banco",),
