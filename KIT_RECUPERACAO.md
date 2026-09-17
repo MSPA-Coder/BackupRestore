@@ -38,7 +38,7 @@ descreve o estado atual, nao substitui a configuracao versionada.
 
 Os arquivos abaixo vivem só nos servidores, fora do Git — a Camada 2 do backup
 (`vps.py`) **nunca os toca**. Copiar para o cofre continua sendo tarefa manual,
-a mesma dos locais. Os quatro primeiros ficam no VPS compartilhado; o portal,
+a mesma dos locais. Os cinco primeiros ficam no VPS compartilhado; o portal,
 num VPS dedicado.
 
 | Projeto (no VPS) | Fora do Git, indispensável |
@@ -47,6 +47,7 @@ num VPS dedicado.
 | `controle-renda-variavel` | `.env.vps` (inclui `PATRIMONIO_TITULAR`); `.secrets/postgres_password`, `.secrets/secret_key`, `.secrets/collector_agent_token`, `.secrets/patrimonio_token`; `.certs/local-root-ca.crt` |
 | `mega-sena` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `conforto-termico` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
+| `networth` | `.env.vps`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/fonte_cb_token`, `.secrets/fonte_crv_token` |
 | `mp-portal` (VPS dedicado) | `.env.vps`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
 
 Não é o mesmo inventário dos locais acima. Confirme os nomes contra a
@@ -63,8 +64,8 @@ com o seu próprio usuário:
 - **`controle-bancario`:** o `patrimonio_token` leva o mesmo dono e modo do
   `django_secret_key` (`chown/chmod --reference`, com `sudo`). Com
   `ubuntu:600`, o deploy passa e a rota responde 503;
-- **`controle-renda-variavel`:** os arquivos ficam com modo `644`, dentro de
-  `.secrets/` com modo `700`.
+- **`controle-renda-variavel` e `networth`:** os arquivos ficam com modo
+  `644`, dentro de `.secrets/` com modo `700`.
 
 ## Estado de implantação
 
