@@ -31,8 +31,11 @@ descreve o estado atual, nao substitui a configuracao versionada.
 - O `patrimonio_token` precisa existir **mesmo sem o NetWorth em uso**: o
   Compose recusa subir com um segredo declarado e ausente.
 - O banco do NetWorth tem dump como o dos outros, local e do VPS (desde
-  17/09/2026). Hoje ele guarda o login e a série de câmbio; a série também
-  pode ser refeita com `manage.py atualizar_cambio`.
+  17/09/2026). Ele guarda o login, a série de câmbio e a foto diária do
+  patrimônio. As duas últimas podem ser refeitas a partir das fontes
+  (`manage.py atualizar_cambio --desde ...` e `manage.py registrar_foto
+  --desde ... --refazer`), e é bom que possam: o dump recupera mais rápido, e
+  refazer é a saída quando o dump não existir.
 
 ## VPS (producao)
 
