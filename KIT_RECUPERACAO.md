@@ -13,7 +13,7 @@ arquivos operacionais nem os segredos provisionados.
 | Projeto | Arquivos externos esperados |
 |---|---|
 | `ControleBancario` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/patrimonio_token`; `.certs/local-root-ca.crt` |
-| `ControleRendaVariavel` | `.env`; `.secrets/postgres_password`, `.secrets/secret_key`, `.secrets/collector_agent_token`, `.secrets/patrimonio_token`; `.certs/local-root-ca.crt`; se o agente RTD estiver instalado, `.docker-local/remote-collector.env` |
+| `ControleRendaVariavel` | `.env`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, `.secrets/collector_agent_token`, `.secrets/patrimonio_token`; `.certs/local-root-ca.crt`; se o agente RTD estiver instalado, `.docker-local/remote-collector.env` |
 | `MegaSena` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `ConfortoTermico` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `MpPortal` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
@@ -47,7 +47,7 @@ num VPS dedicado.
 | Projeto (no VPS) | Fora do Git, indispensável |
 |---|---|
 | `controle-bancario` | `.env.vps`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/patrimonio_token`; `.certs/local-root-ca.crt` |
-| `controle-renda-variavel` | `.env.vps` (inclui `PATRIMONIO_TITULAR`); `.secrets/postgres_password`, `.secrets/secret_key`, `.secrets/collector_agent_token`, `.secrets/patrimonio_token`; `.certs/local-root-ca.crt` |
+| `controle-renda-variavel` | `.env.vps` (inclui `PATRIMONIO_TITULAR`); `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, `.secrets/collector_agent_token`, `.secrets/patrimonio_token`; `.certs/local-root-ca.crt` |
 | `mega-sena` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `conforto-termico` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `networth` | `.env.vps`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/fonte_cb_token`, `.secrets/fonte_crv_token` |
