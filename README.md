@@ -37,6 +37,7 @@ python cli.py sincronizar-vps --todos # Camada 2: busca, verifica e cataloga os 
 python cli.py listar                  # catálogo
 python cli.py verificar               # relê os arquivos e confere SHA-256
 python cli.py ensaio --projeto mega_sena   # restaura no sandbox e compara com a origem
+scripts\\ensaio-mensal.ps1                 # verifica e ensaia local + VPS
 python web.py                         # interface em http://127.0.0.1:5401
 ```
 
@@ -259,6 +260,20 @@ locais). Nos dois casos o catálogo e os artefatos anteriores continuam
 íntegros — o que faltou foi a captura do dia.
 
 Depois da primeira execução, confira o resultado com `python cli.py listar`.
+
+### Ensaio mensal
+
+O script `scripts\\ensaio-mensal.ps1` encadeia `verificar` e os ensaios de
+`controle_renda_variavel` e `controle_renda_variavel_vps`. Ele grava
+`ensaio-mensal-ultimo.txt` por troca atômica, retorna código diferente de zero
+quando qualquer restauração falha e nunca restaura em contêiner operacional — o
+`cli.py` mantém a allowlist do `backuprestore-sandbox`.
+
+Registre-o no Agendador de Tarefas para o primeiro dia de cada mês, depois da
+sincronização diária (por exemplo, 04:30), com a opção de executar assim que
+possível após perder o início e sem iniciar uma segunda instância. O histórico
+legível fica no arquivo acima; o mesmo runtime Python validado pelo
+`BACKUPRESTORE_PYTHON` é usado pela tarefa.
 
 **A tarefa do VPS precisa do sandbox de pé** (`docker compose -f
 compose.teste.yaml up -d`, uma vez — o script deixa o contêiner parado entre
