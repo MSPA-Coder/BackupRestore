@@ -82,3 +82,4 @@ catalogo.sqlite3-wal
 configuracao.local.json
 agendamento.local.json
 ultima-execucao.txt
+ensaio-mensal-ultimo.txt
