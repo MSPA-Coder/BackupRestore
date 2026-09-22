@@ -17,10 +17,26 @@ arquivos operacionais nem os segredos provisionados.
 | `MegaSena` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `ConfortoTermico` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; os três tokens internos `.secrets/internal_token.txt`, `.secrets/internal_control_token.txt`, `.secrets/internal_read_token.txt`; `.certs/local-root-ca.crt` |
 | `MpPortal` | `.env`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
+| `BackupRestore` | `configuracao.local.json` (endereço do VPS, usuário e caminho da chave SSH) e `agendamento.local.json` |
 | `NetWorth` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/fonte_cb_token`, `.secrets/fonte_crv_token`, `.secrets/senha-inicial.txt` |
 
 Confira sempre o README e o `compose.yaml` da versao restaurada: esse inventario
 descreve o estado atual, nao substitui a configuracao versionada.
+
+### O catálogo NÃO entra no kit, de propósito
+
+`catalogo.sqlite3` (300 KB) fica de fora. Ele muda a cada execução, então uma
+cópia no kit envelhece entre uma regeneração manual e a seguinte, e um índice
+velho sobre um acervo novo confunde mais do que ajuda.
+
+Ele também não é insubstituível: cada artefato carrega ao lado um
+`<arquivo>.manifest.json` com projeto, tipo, `criado_em`, `bytes` e o
+`sha256` — que é exatamente o que `banco.registrar_artefato` grava. O catálogo
+é reconstruível varrendo a raiz de backup e relendo esses manifestos.
+
+**Não existe hoje um comando que faça essa reconstrução.** Enquanto não
+existir, perder o catálogo custa escrever o script na hora do aperto. Se isso
+parecer caro demais, a saída é criar o comando — não pôr o banco no kit.
 
 O arquivo de ambiente do MpPortal chama-se `.env`; todos os outros usam
 `.env.docker`. Procurar o nome dos demais ali nao acha nada.
