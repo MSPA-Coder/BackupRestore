@@ -149,6 +149,10 @@ def _falhas_do_agendamento() -> list:
     ]
 
 
+def _problemas(totais: dict[str, dict[str, int]]) -> int:
+    return totais["corrompido"]["quantidade"] + totais["ausente"]["quantidade"]
+
+
 def _dias_desde(momento: str | None) -> int | None:
     if not momento:
         return None
@@ -161,8 +165,7 @@ def _dias_desde(momento: str | None) -> int | None:
 @app.get("/")
 def painel():
     resumos = {p.slug: banco.resumo_projeto(p.slug) for p in PROJETOS}
-    artefatos = [a for a in banco.listar_artefatos(limite=1000) if a["tipo"] in ROTULOS]
-    problemas = [a for a in artefatos if a["situacao"] in ("corrompido", "ausente")]
+    totais = banco.totais_por_situacao()
     execucoes = banco.listar_execucoes(limite=20)
     # O que está falhando *agora* — não o histórico. Fica no topo do painel
     # porque o código de saída da tarefa agendada não chega a lugar nenhum.
@@ -175,9 +178,9 @@ def painel():
         falhas=falhas,
         dias_sem_execucao=dias_sem_execucao,
         silencio=dias_sem_execucao is None or dias_sem_execucao >= DIAS_DE_SILENCIO_ATE_ALERTAR,
-        total_artefatos=len([a for a in artefatos if a["situacao"] == "valido"]),
-        total_bytes=sum(a["bytes"] for a in artefatos if a["situacao"] == "valido"),
-        problemas=problemas,
+        total_artefatos=totais["valido"]["quantidade"],
+        total_bytes=totais["valido"]["bytes"],
+        problemas=_problemas(totais),
         espaco_livre=motor.espaco_livre(),
         raiz=raiz_backup(),
         em_andamento=[e for e in execucoes if e["situacao"] in ("fila", "rodando")],
@@ -252,22 +255,23 @@ def restaurar_catalogo():
 @app.get("/integridade")
 def integridade():
     artefatos = [a for a in banco.listar_artefatos(limite=500) if a["tipo"] in ROTULOS]
+    # A tabela mostra os 500 mais recentes; os números contam o acervo inteiro.
+    totais = banco.totais_por_situacao()
     return render_template(
         "integridade.html",
         artefatos=artefatos,
-        inteiros=sum(1 for a in artefatos if a["situacao"] == "valido"),
-        problemas=sum(1 for a in artefatos if a["situacao"] in ("corrompido", "ausente")),
+        inteiros=totais["valido"]["quantidade"],
+        problemas=_problemas(totais),
     )
 
 
 @app.get("/retencao")
 def retencao():
-    contagens: dict[str, dict[str, int]] = {}
-    for projeto_atual in PROJETOS:
-        contagens[projeto_atual.slug] = {
-            tipo: len(banco.artefatos_validos(projeto_atual.slug, tipo))
-            for tipo in ROTULOS
-        }
+    validos = banco.contagens_validas()
+    contagens = {
+        projeto_atual.slug: {tipo: validos.get((projeto_atual.slug, tipo), 0) for tipo in ROTULOS}
+        for projeto_atual in PROJETOS
+    }
     return render_template("retencao.html", projetos=PROJETOS, contagens=contagens)
 
 

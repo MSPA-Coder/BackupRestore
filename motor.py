@@ -37,8 +37,10 @@ import json
 import os
 import shutil
 import subprocess
+import threading
 import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
@@ -52,6 +54,11 @@ from configuracao import (
 from projetos import CONTAINER_SANDBOX, Projeto
 
 TEMPO_LIMITE_PADRAO = 3600  # dumps grandes; o maior hoje leva ~1 min
+
+# `verificar` passa quase todo o tempo esperando `docker exec` subir (~0,2 s
+# por dump, contra milissegundos de hash). Quatro releituras simultâneas no
+# sandbox dividem esse tempo sem disputar disco nem CPU de forma relevante.
+TRABALHADORES_VERIFICACAO = 4
 
 
 class FalhaDeBackup(RuntimeError):
@@ -503,41 +510,61 @@ def verificar(projeto_slug: str | None = None) -> dict[str, int]:
     acervo que não corresponde ao disco.
     """
     contagem = {"conferidos": 0, "ausentes": 0, "corrompidos": 0, "nao_verificados": 0}
-    sandbox: bool | None = None  # decidido na primeira vez que um dump aparecer
-    for linha in banco.listar_artefatos(projeto_slug, limite=10000):
-        if linha["situacao"] not in ("valido", "corrompido", "ausente"):
-            continue
+    linhas = [
+        linha for linha in banco.listar_artefatos(projeto_slug, limite=10000)
+        if linha["situacao"] in ("valido", "corrompido", "ausente")
+    ]
+
+    # Decidido uma única vez, na primeira vez que um dump chegar à releitura;
+    # a trava impede que dois trabalhadores liguem o sandbox ao mesmo tempo ou
+    # cheguem a vereditos diferentes sobre ele.
+    trava = threading.Lock()
+    sandbox: list[bool] = []
+
+    def sandbox_de_pe() -> bool:
+        with trava:
+            if not sandbox:
+                sandbox.append(_sandbox_disponivel())
+            return sandbox[0]
+
+    def conferir(linha) -> tuple[str, str | None]:
+        """(chave da contagem, situação a gravar — None deixa como está).
+
+        Roda nos trabalhadores e não toca o catálogo: quem grava é a thread
+        principal, uma linha por vez, como antes do paralelismo.
+        """
         try:
             caminho = caminho_artefato(linha["caminho_relativo"])
         except FalhaDeBackup:
-            banco.marcar_situacao_artefato(linha["id"], "corrompido")
-            contagem["corrompidos"] += 1
-            continue
+            return "corrompidos", "corrompido"
         if not os.path.exists(caminho):
-            banco.marcar_situacao_artefato(linha["id"], "ausente")
-            contagem["ausentes"] += 1
-            continue
+            return "ausentes", "ausente"
         if sha256_arquivo(caminho) != linha["sha256"]:
-            banco.marcar_situacao_artefato(linha["id"], "corrompido")
-            contagem["corrompidos"] += 1
-            continue
-        if linha["tipo"] == "banco":
-            if sandbox is None:
-                sandbox = _sandbox_disponivel()
-            if not sandbox:
-                contagem["nao_verificados"] += 1
-                continue
+            return "corrompidos", "corrompido"
+        if linha["tipo"] == "banco" and not sandbox_de_pe():
+            return "nao_verificados", None
         try:
             if linha["tipo"] == "banco":
                 _reler_dump(CONTAINER_SANDBOX, caminho)
             elif linha["tipo"] == "codigo":
                 verificar_zip_codigo(caminho)
         except FalhaDeBackup:
-            banco.marcar_situacao_artefato(linha["id"], "corrompido")
-            contagem["corrompidos"] += 1
-            continue
-        banco.marcar_situacao_artefato(linha["id"], "valido")
-        contagem["conferidos"] += 1
+            return "corrompidos", "corrompido"
+        return "conferidos", "valido"
+
+    executor = ThreadPoolExecutor(max_workers=TRABALHADORES_VERIFICACAO)
+    try:
+        # `map` devolve na ordem de entrada e repassa a exceção inesperada
+        # (disco, permissão) de quem a levantou, interrompendo o laço como a
+        # versão sequencial fazia.
+        for linha, (chave, situacao) in zip(linhas, executor.map(conferir, linhas)):
+            if situacao is not None:
+                banco.marcar_situacao_artefato(linha["id"], situacao)
+            contagem[chave] += 1
+    finally:
+        # Numa exceção, o que ainda está na fila não roda: nada dali seria
+        # gravado mesmo, e esperar por tudo só atrasaria o erro.
+        executor.shutdown(wait=True, cancel_futures=True)
     return contagem
 
 
