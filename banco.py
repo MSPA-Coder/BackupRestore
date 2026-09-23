@@ -249,6 +249,36 @@ def listar_artefatos(projeto: str | None = None, limite: int = 200) -> list[sqli
         ).fetchall()
 
 
+def totais_por_situacao() -> dict[str, dict[str, int]]:
+    """Quantidade e bytes de cada situação, sobre o acervo inteiro.
+
+    Os números do painel e da integridade vêm daqui, e não de `len()` sobre
+    `listar_artefatos`: aquela lista tem `LIMIT`, e um total contado nela
+    encolhe calado quando o catálogo passa do limite — inclusive deixando de
+    fora os corrompidos mais antigos, que são justamente os que pedem atenção.
+    """
+    with conectar() as conexao:
+        linhas = conexao.execute(
+            "SELECT situacao, COUNT(*) AS quantidade, COALESCE(SUM(bytes), 0) AS bytes"
+            " FROM artefatos GROUP BY situacao"
+        ).fetchall()
+    totais = {situacao: {"quantidade": 0, "bytes": 0} for situacao in SITUACOES_ARTEFATO}
+    for linha in linhas:
+        totais[linha["situacao"]] = {"quantidade": linha["quantidade"], "bytes": linha["bytes"]}
+    return totais
+
+
+def contagens_validas(finalidade: str = "regular") -> dict[tuple[str, str], int]:
+    """Artefatos válidos por (projeto, tipo) — o que a retenção conta."""
+    with conectar() as conexao:
+        linhas = conexao.execute(
+            "SELECT projeto, tipo, COUNT(*) AS quantidade FROM artefatos"
+            " WHERE finalidade = ? AND situacao = 'valido' GROUP BY projeto, tipo",
+            (finalidade,),
+        ).fetchall()
+    return {(linha["projeto"], linha["tipo"]): linha["quantidade"] for linha in linhas}
+
+
 def obter_artefato(artefato_id: int) -> sqlite3.Row | None:
     with conectar() as conexao:
         return conexao.execute(

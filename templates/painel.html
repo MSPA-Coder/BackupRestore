@@ -65,7 +65,7 @@
   <article class="metric"><span>Artefatos válidos</span><strong>{{ total_artefatos }}</strong><small>{{ total_bytes | tamanho }} armazenados</small></article>
   <article class="metric"><span>Em andamento</span><strong>{{ em_andamento | length }}</strong><small>operações agora</small></article>
   <article class="metric {% if problemas %}warning{% endif %}">
-    <span>Requer atenção</span><strong>{{ problemas | length }}</strong>
+    <span>Requer atenção</span><strong>{{ problemas }}</strong>
     <small>{% if problemas %}artefatos ausentes ou corrompidos{% else %}nada pendente{% endif %}</small>
   </article>
 </div>
