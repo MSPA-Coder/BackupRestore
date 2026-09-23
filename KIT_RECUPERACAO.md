@@ -12,15 +12,47 @@ arquivos operacionais nem os segredos provisionados.
 
 | Projeto | Arquivos externos esperados |
 |---|---|
-| `ControleBancario` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/patrimonio_token`; `.certs/local-root-ca.crt` |
-| `ControleRendaVariavel` | `.env`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, `.secrets/collector_agent_token`, `.secrets/patrimonio_token`; `.certs/local-root-ca.crt`; se o agente RTD estiver instalado, `.docker-local/remote-collector.env` |
+| `ControleBancario` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/patrimonio_token`; os três de qualidade `.secrets/quality_postgres_password`, `.secrets/quality_django_secret_key`, `.secrets/quality_patrimonio_token`; `.certs/local-root-ca.crt` |
+| `ControleRendaVariavel` | `.env`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, `.secrets/database_url`, `.secrets/patrimonio_token`; o par do coletor `.secrets/collector_agent_read_token` e `.secrets/collector_agent_write_token`; os dois de qualidade `.secrets/postgres_password_quality` e `.secrets/postgres_app_password_quality`; `.certs/local-root-ca.crt`; se o agente RTD estiver instalado, `.docker-local/remote-collector.env` e `.docker-local/rtd-control-token` |
 | `MegaSena` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
-| `ConfortoTermico` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
-| `MpPortal` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
-| `NetWorth` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/fonte_cb_token`, `.secrets/fonte_crv_token` |
+| `ConfortoTermico` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; os três tokens internos `.secrets/internal_token.txt`, `.secrets/internal_control_token.txt`, `.secrets/internal_read_token.txt`; `.certs/local-root-ca.crt` |
+| `MpPortal` | `.env`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
+| `BackupRestore` | `configuracao.local.json` (endereço do VPS, usuário e caminho da chave SSH) e `agendamento.local.json` |
+| `NetWorth` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/fonte_cb_token`, `.secrets/fonte_crv_token`, `.secrets/senha-inicial.txt` |
 
 Confira sempre o README e o `compose.yaml` da versao restaurada: esse inventario
 descreve o estado atual, nao substitui a configuracao versionada.
+
+### O catálogo NÃO entra no kit, de propósito
+
+`catalogo.sqlite3` (300 KB) fica de fora. Ele muda a cada execução, então uma
+cópia no kit envelhece entre uma regeneração manual e a seguinte, e um índice
+velho sobre um acervo novo confunde mais do que ajuda.
+
+Ele também não é insubstituível: cada artefato carrega ao lado um
+`<arquivo>.manifest.json` com projeto, tipo, `criado_em`, `bytes` e o
+`sha256` — que é exatamente o que `banco.registrar_artefato` grava. O catálogo
+é reconstruível varrendo a raiz de backup e relendo esses manifestos.
+
+**Não existe hoje um comando que faça essa reconstrução.** Enquanto não
+existir, perder o catálogo custa escrever o script na hora do aperto. Se isso
+parecer caro demais, a saída é criar o comando — não pôr o banco no kit.
+
+O arquivo de ambiente do MpPortal chama-se `.env`; todos os outros usam
+`.env.docker`. Procurar o nome dos demais ali nao acha nada.
+
+A tabela acima foi conferida contra o disco em 22/09/2026, e cinco das seis
+linhas estavam desatualizadas: faltavam os segredos de qualidade do
+ControleBancario e do Renda Variavel, os dois tokens internos extras do
+ConfortoTermico, o `database_url`, a `senha-inicial.txt` do NetWorth e o
+`rtd-control-token` do agente; o `collector_agent_token` virou um par
+`read`/`write`; e o MpPortal usa `.env`, nao `.env.docker`.
+
+O desvio nao era visivel: os segredos nasceram e mudaram de nome nos projetos,
+e nada liga este documento a eles. **Confira esta tabela contra o disco sempre
+que um projeto ganhar ou renomear um segredo** -- um inventario que lista
+nomes que nao existem so e descoberto durante uma recuperacao, que e o pior
+momento possivel.
 
 **Os segredos que ligam sistemas precisam ser restaurados aos pares.**
 
@@ -55,6 +87,12 @@ num VPS dedicado.
 
 Não é o mesmo inventário dos locais acima. Confirme os nomes contra a
 configuração da versão restaurada antes de cada ensaio.
+
+**Esta tabela do VPS nao foi conferida na revisao de 22/09/2026** -- so a dos
+locais foi, porque so o disco desta maquina estava ao alcance. Dado que cinco
+das seis linhas locais estavam desatualizadas, trate os nomes daqui como
+suspeitos ate confirma-los num servidor: e razoavel que tenham derivado pelos
+mesmos motivos.
 
 O token do coletor de Renda Variável precisa corresponder no servidor e no
 agente Windows. Preserve-o por canal seguro; não copie seu valor para este
