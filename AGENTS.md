@@ -90,6 +90,12 @@ python cli.py ensaio --projeto <slug>
   --quiet`, suba o servico, aguarde o health check e descarte somente o volume
   do sandbox ao concluir.
 
+O que merece teste, em que camada e em que forma está em `docs/TESTES.md`,
+comum aos repositórios; leia antes de escrever ou remover um teste. Diante de
+vermelho, decida de quem é o defeito antes de mexer: teste que mede texto
+literal reprova mudança legítima, e nesse caso quem se corrige é a asserção.
+Nunca escreva código para o teste passar.
+
 Nao substitua o ensaio de restauracao apenas por mocks. Testes pequenos devem
 proteger selecao de alvo, bloqueios, retencao e falhas antes do ensaio real.
 
