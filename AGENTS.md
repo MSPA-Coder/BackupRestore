@@ -10,7 +10,7 @@ Docker.
 
 - `README.md`: instalacao, operacao e formato dos artefatos.
 - `RESTAURAR.md`: recuperacao manual e limites do backup.
-- `projetos.py`: os oito projetos (quatro locais e quatro de origem VPS, campos
+- `projetos.py`: os nove projetos (quatro locais e cinco de origem VPS, campos
   `ambiente` e `servidor`) e os containers protegidos.
 - `motor.py` e `restaurar.py`: contratos de integridade e restauracao dos
   projetos locais.
