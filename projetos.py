@@ -198,17 +198,9 @@ PROJETOS: tuple[Projeto, ...] = (
         retencao=RETENCAO_VPS,
         tipos=("banco",),
     ),
-    Projeto(
-        slug="networth_vps",
-        nome="NetWorth (VPS)",
-        pasta="",
-        container="networth-postgres-1",
-        usuario="networth",
-        banco="networth",
-        ambiente=AMBIENTE_VPS,
-        retencao=RETENCAO_VPS,
-        tipos=("banco",),
-    ),
+    # `networth_vps` saiu do catálogo em 29/09/2026: o NetWorth foi aposentado no
+    # VPS (o Wealthfolio opera no domínio dele). Os dumps já catalogados ficam no
+    # disco, sem retenção nem verificação novas.
     # Mesmo agente restrito e mesmo formato de dump; muda só o alvo SSH.
     Projeto(
         slug="mp_portal_vps",
