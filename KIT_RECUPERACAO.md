@@ -18,7 +18,6 @@ arquivos operacionais nem os segredos provisionados.
 | `ConfortoTermico` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; os três tokens internos `.secrets/internal_token.txt`, `.secrets/internal_control_token.txt`, `.secrets/internal_read_token.txt`; `.certs/local-root-ca.crt` |
 | `MpPortal` | `.env`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
 | `BackupRestore` | `configuracao.local.json` (endereço do VPS, usuário e caminho da chave SSH) e `agendamento.local.json` |
-| `NetWorth` | `.env.docker`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/fonte_cb_token`, `.secrets/fonte_crv_token`, `.secrets/senha-inicial.txt` |
 
 Confira sempre o README e o `compose.yaml` da versao restaurada: esse inventario
 descreve o estado atual, nao substitui a configuracao versionada.
@@ -56,24 +55,19 @@ momento possivel.
 
 **Os segredos que ligam sistemas precisam ser restaurados aos pares.**
 
-- O `patrimonio_token` do ControleBancario tem de ser o mesmo valor do
-  `fonte_cb_token` do NetWorth, e o do ControleRendaVariavel o mesmo do
-  `fonte_crv_token`. Restaurar só um dos lados deixa o consolidado sem fonte
-  (401), sem que nenhum dos dois sistemas pareça quebrado.
-- O `patrimonio_token` precisa existir **mesmo sem o NetWorth em uso**: o
-  Compose recusa subir com um segredo declarado e ausente.
-- O banco do NetWorth tem dump como o dos outros, local e do VPS (desde
-  17/09/2026). Ele guarda o login, a série de câmbio e a foto diária do
-  patrimônio. As duas últimas podem ser refeitas a partir das fontes
-  (`manage.py atualizar_cambio --desde ...` e `manage.py registrar_foto
-  --desde ... --refazer`), e é bom que possam: o dump recupera mais rápido, e
-  refazer é a saída quando o dump não existir.
+- O `patrimonio_token` precisa existir: o Compose recusa subir com um segredo
+  declarado e ausente.
+- Os `patrimonio_integration_token` do ControleBancario e do ControleRendaVariavel
+  (rotas v4) são os que o add-on do Wealthfolio guarda no cofre dele. Rotacionar
+  um deles exige colar o valor novo na tela do add-on.
+- O NetWorth (prova de conceito) foi aposentado em 29/09/2026. Os dumps antigos
+  do banco dele ficam no acervo, sem retenção nem verificação novas.
 
 ## VPS (producao)
 
 Os arquivos abaixo vivem só nos servidores, fora do Git — a Camada 2 do backup
 (`vps.py`) **nunca os toca**. Copiar para o cofre continua sendo tarefa manual,
-a mesma dos locais. Os cinco primeiros ficam no VPS compartilhado; o portal,
+a mesma dos locais. Os quatro primeiros ficam no VPS compartilhado; o portal,
 num VPS dedicado.
 
 | Projeto (no VPS) | Fora do Git, indispensável |
@@ -82,7 +76,6 @@ num VPS dedicado.
 | `controle-renda-variavel` | `.env.vps` (inclui `PATRIMONIO_TITULAR`); `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, `.secrets/collector_agent_token`, `.secrets/patrimonio_token`; `.certs/local-root-ca.crt` |
 | `mega-sena` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `conforto-termico` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
-| `networth` | `.env.vps`; `.secrets/postgres_password`, `.secrets/django_secret_key`, `.secrets/fonte_cb_token`, `.secrets/fonte_crv_token` |
 | `mp-portal` (VPS dedicado) | `.env.vps`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
 
 Não é o mesmo inventário dos locais acima. Confirme os nomes contra a
@@ -105,7 +98,7 @@ com o seu próprio usuário:
 - **`controle-bancario`:** o `patrimonio_token` leva o mesmo dono e modo do
   `django_secret_key` (`chown/chmod --reference`, com `sudo`). Com
   `ubuntu:600`, o deploy passa e a rota responde 503;
-- **`controle-renda-variavel` e `networth`:** os arquivos ficam com modo
+- **`controle-renda-variavel`:** os arquivos ficam com modo
   `644`, dentro de `.secrets/` com modo `700`.
 
 ## Estado de implantação

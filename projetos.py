@@ -137,16 +137,6 @@ PROJETOS: tuple[Projeto, ...] = (
         usuario="investimentos",
         banco="investimentos",
     ),
-    # Consolidador de patrimônio (17/09/2026). Só lê os outros dois; o banco
-    # dele guarda o login, a série de câmbio e, mais adiante, a foto diária.
-    Projeto(
-        slug="networth",
-        nome="NetWorth",
-        pasta="NetWorth",
-        container="networth-postgres-1",
-        usuario="networth",
-        banco="networth",
-    ),
     # Projetos de produção no VPS, sincronizados pela Camada 2. Mesmos
     # apelidos de contêiner, usuário e banco dos originais — são os nomes reais
     # do lado de lá — mas em `ambiente="vps"`, sem pasta local e sem tipo
@@ -198,8 +188,9 @@ PROJETOS: tuple[Projeto, ...] = (
         retencao=RETENCAO_VPS,
         tipos=("banco",),
     ),
-    # `networth_vps` saiu do catálogo em 29/09/2026: o NetWorth foi aposentado no
-    # VPS (o Wealthfolio opera no domínio dele). Os dumps já catalogados ficam no
+    # `networth` e `networth_vps` saíram do catálogo em 29/09/2026: o NetWorth (prova
+    # de conceito) foi aposentado, local e no VPS
+    # (o Wealthfolio opera no domínio dele). Os dumps já catalogados ficam no
     # disco, sem retenção nem verificação novas.
     # Mesmo agente restrito e mesmo formato de dump; muda só o alvo SSH.
     Projeto(
