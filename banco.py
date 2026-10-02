@@ -1,8 +1,9 @@
 """Catálogo SQLite: o que existe, se está íntegro e o que aconteceu.
 
-Sem ORM e sem migrações. São três tabelas de forma fixa; `criar_tabelas()` usa
-`IF NOT EXISTS` e é chamada a cada início. Uma camada de mapeamento aqui seria
-mais código que o schema inteiro.
+Sem ORM. São três tabelas de forma fixa; `criar_tabelas()` usa `IF NOT EXISTS`
+e é chamada a cada início. Uma camada de mapeamento aqui seria mais código que
+o schema inteiro. A única migração é a do tipo `volume` (02/10/2026), em
+`_aceitar_tipo_volume`: o SQLite não altera um CHECK no lugar.
 
 Cada função abre e fecha a própria conexão. O modo WAL permite que a interface
 leia enquanto o motor escreve, que é a única concorrência que existe.
@@ -19,14 +20,17 @@ from projetos import CAMINHO_CATALOGO
 
 SITUACOES_ARTEFATO = ("criando", "valido", "corrompido", "ausente", "removido")
 SITUACOES_EXECUCAO = ("fila", "rodando", "sucesso", "falha")
-TIPOS_ARTEFATO = ("banco", "codigo")
+# `volume`: cópia `.tar.gz` de um diretório de contêiner, feita no VPS com o
+# contêiner pausado (hoje, o SQLite do Wealthfolio). Ver `vps.py`.
+TIPOS_ARTEFATO = ("banco", "codigo", "volume")
 FINALIDADES = ("regular", "pre_restauracao")
 
-ESQUEMA = """
-CREATE TABLE IF NOT EXISTS artefatos (
+# As colunas de `artefatos` ficam à parte porque a migração do tipo `volume`
+# recria a tabela com elas, e duas cópias da definição divergiriam.
+COLUNAS_ARTEFATOS = """(
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     projeto          TEXT NOT NULL,
-    tipo             TEXT NOT NULL CHECK (tipo IN ('banco','codigo')),
+    tipo             TEXT NOT NULL CHECK (tipo IN ('banco','codigo','volume')),
     finalidade       TEXT NOT NULL DEFAULT 'regular'
                      CHECK (finalidade IN ('regular','pre_restauracao')),
     situacao         TEXT NOT NULL DEFAULT 'criando'
@@ -39,7 +43,15 @@ CREATE TABLE IF NOT EXISTS artefatos (
     duracao_ms       INTEGER,
     fixado           INTEGER NOT NULL DEFAULT 0,
     execucao_id      INTEGER
-);
+)"""
+
+INDICES_ARTEFATOS = """
+CREATE INDEX IF NOT EXISTS ix_artefatos_projeto ON artefatos(projeto, tipo, criado_em DESC);
+CREATE INDEX IF NOT EXISTS ix_artefatos_situacao ON artefatos(situacao);
+"""
+
+ESQUEMA = f"""
+CREATE TABLE IF NOT EXISTS artefatos {COLUNAS_ARTEFATOS};
 
 CREATE TABLE IF NOT EXISTS execucoes (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,8 +78,7 @@ CREATE TABLE IF NOT EXISTS eventos (
     mensagem    TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS ix_artefatos_projeto ON artefatos(projeto, tipo, criado_em DESC);
-CREATE INDEX IF NOT EXISTS ix_artefatos_situacao ON artefatos(situacao);
+{INDICES_ARTEFATOS}
 CREATE INDEX IF NOT EXISTS ix_execucoes_pedido ON execucoes(pedido_em DESC);
 CREATE INDEX IF NOT EXISTS ix_eventos_momento ON eventos(momento DESC);
 """
@@ -96,6 +107,62 @@ def conectar() -> Iterator[sqlite3.Connection]:
 def criar_tabelas() -> None:
     with conectar() as conexao:
         conexao.executescript(ESQUEMA)
+    _aceitar_tipo_volume()
+
+
+def _aceitar_tipo_volume() -> None:
+    """Migra o catálogo criado antes do tipo `volume`.
+
+    O `CREATE TABLE IF NOT EXISTS` não toca uma tabela que já existe, e o
+    catálogo de antes tem `CHECK (tipo IN ('banco','codigo'))`: a primeira
+    cópia de volume buscada do VPS seria recusada pelo próprio SQLite. Como o
+    SQLite não altera CHECK, a tabela é recriada com as mesmas linhas e os
+    mesmos ids, numa transação só (o procedimento da documentação do SQLite
+    para mudar uma tabela). Depois disso o CHECK já aceita `volume` e esta
+    função não faz nada.
+
+    Rollback: o código anterior lê a tabela migrada sem diferença nenhuma (o
+    CHECK só ficou mais largo); as linhas de volume ele não mostra nem confere
+    além do SHA-256.
+    """
+    with conectar() as conexao:
+        conexao.execute("BEGIN IMMEDIATE")
+        definicao = conexao.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'artefatos'"
+        ).fetchone()["sql"]
+        if "'volume'" in definicao:
+            return
+        antes = conexao.execute("SELECT COUNT(*) FROM artefatos").fetchone()[0]
+        sequencia = conexao.execute(
+            "SELECT seq FROM sqlite_sequence WHERE name = 'artefatos'"
+        ).fetchone()
+        conexao.execute(f"CREATE TABLE artefatos_migracao {COLUNAS_ARTEFATOS}")
+        # Colunas nomeadas, e não `SELECT *`: uma tabela antiga com outra
+        # ordem ou outra coluna faz a cópia falhar inteira, em vez de trocar
+        # valores de lugar.
+        colunas = (
+            "id, projeto, tipo, finalidade, situacao, caminho_relativo, bytes, sha256,"
+            " criado_em, validado_em, duracao_ms, fixado, execucao_id"
+        )
+        conexao.execute(
+            f"INSERT INTO artefatos_migracao ({colunas}) SELECT {colunas} FROM artefatos"
+        )
+        depois = conexao.execute("SELECT COUNT(*) FROM artefatos_migracao").fetchone()[0]
+        if depois != antes:
+            raise RuntimeError(
+                f"migração do catálogo abortada: {antes} artefato(s) antes, {depois} depois"
+            )
+        conexao.execute("DROP TABLE artefatos")
+        conexao.execute("ALTER TABLE artefatos_migracao RENAME TO artefatos")
+        # O AUTOINCREMENT promete não reusar id. A tabela nova herdou só o
+        # maior id existente; a sequência antiga pode estar acima dele.
+        if sequencia is not None:
+            conexao.execute(
+                "UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'artefatos'",
+                (sequencia["seq"],),
+            )
+        for comando in INDICES_ARTEFATOS.strip().splitlines():
+            conexao.execute(comando)
 
 
 # --------------------------------------------------------------------------

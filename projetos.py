@@ -205,6 +205,24 @@ PROJETOS: tuple[Projeto, ...] = (
         tipos=("banco",),
         servidor=SERVIDOR_PORTAL,
     ),
+    # O Wealthfolio não tem Postgres: o patrimônio fica num SQLite dentro do
+    # volume `wealthfolio-teste-data`, e o que vem do servidor é a cópia desse
+    # diretório (`volume/*.tar.gz`), feita lá com o contêiner pausado. Usuário
+    # e banco ficam vazios porque não há `pg_dump` nem restauração automática;
+    # a volta é manual e precisa da chave mestra do kit (RESTAURAR.md). O slug
+    # segue o projeto do Compose (`wealthfolio-teste`): se ele for renomeado
+    # no servidor, este muda junto.
+    Projeto(
+        slug="wealthfolio_teste_vps",
+        nome="Wealthfolio (VPS)",
+        pasta="",
+        container="wealthfolio-teste-wealthfolio-1",
+        usuario="",
+        banco="",
+        ambiente=AMBIENTE_VPS,
+        retencao=RETENCAO_VPS,
+        tipos=("volume",),
+    ),
 )
 
 # Inventário dos contêineres associados aos projetos. A restauração automática

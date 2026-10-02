@@ -21,7 +21,7 @@
 
 <div class="health-strip" aria-label="Configuração do projeto">
   <span><i></i>Contêiner {{ projeto.container }}</span>
-  <span><i></i>Banco {{ projeto.banco }} (usuário {{ projeto.usuario }})</span>
+  {% if 'banco' in projeto.tipos %}<span><i></i>Banco {{ projeto.banco }} (usuário {{ projeto.usuario }})</span>{% endif %}
   <span><i></i>Retenção {{ projeto.retencao }} por tipo</span>
   <span><i></i>{% if projeto.e_repo_git %}Repositório Git válido{% else %}Sem repositório Git{% endif %}</span>
 </div>
@@ -43,6 +43,7 @@
       <h2>{{ rotulos[tipo] }}</h2>
       <p>
         {% if tipo == 'banco' %}Dumps <code>pg_dump --format=custom</code>, verificados com <code>pg_restore --list</code>.
+        {% elif tipo == 'volume' %}Cópia <code>.tar.gz</code> do diretório de dados do contêiner, feita no servidor com o contêiner pausado e relida aqui por inteiro. Só volta com a chave mestra do kit de recuperação.
         {% else %}ZIP gerado pelo aplicativo com arquivos rastreados e não ignorados pelo Git.{% endif %}
       </p>
     </div>

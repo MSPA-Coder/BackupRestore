@@ -1,4 +1,4 @@
-"""Camada 2: busca, verificação e catalogação de dumps do VPS.
+"""Camada 2: busca, verificação e catalogação de dumps e cópias de volume do VPS.
 
 O BackupRestore não fala mais com a produção diretamente — não dispara
 `pg_dump`, não consulta nem liga contêiner de projeto real. Fala só com o
@@ -12,7 +12,8 @@ O ciclo, por projeto, para cada dump que existe lá e ainda não está aqui:
 2. conferir o SHA-256 contra o que `listar` informou;
 3. reler no **sandbox** local com `pg_restore --list` — não no contêiner do
    projeto: a origem é outra máquina, o sandbox é o destino de leitura neutro
-   que este projeto já usa para todo ensaio;
+   que este projeto já usa para todo ensaio. A cópia de volume (`.tar.gz`, o
+   SQLite do Wealthfolio) é relida aqui mesmo, por `motor.verificar_volume`;
 4. registrar no catálogo, com o carimbo de tempo do **servidor**, não da hora
    do download — é o que faz a retenção continuar correta depois de um PC que
    ficou dias fora buscar vários de uma vez;
@@ -87,9 +88,10 @@ TEMPO_LIMITE_ENVIO = 600
 # E, para os caminhos locais, mais duas:
 #
 # 3. `_PADRAO_LISTAGEM`, abaixo: o nome só é aceito se casar
-#    `[a-z_]+_banco_\d{8}_\d{6}\.dump`. Não cabe barra, `..`, ponto extra
-#    nem metacaractere de shell; uma linha fora do formato levanta
-#    `FalhaDeSincronizacao` e nada é lido.
+#    `[a-z_]+_banco_\d{8}_\d{6}\.dump` ou, desde 02/10/2026,
+#    `[a-z_]+_volume_\d{8}_\d{6}\.tar\.gz`. Não cabe barra, `..`, ponto fora
+#    da extensão nem metacaractere de shell; uma linha fora do formato
+#    levanta `FalhaDeSincronizacao` e nada é lido.
 # 4. `configuracao.caminho_sob_raiz`, que resolve o caminho (seguindo links
 #    simbólicos) e recusa qualquer destino fora da raiz de backup.
 #
@@ -104,11 +106,22 @@ TEMPO_LIMITE_ENVIO = 600
 # palavras.
 
 # Espelha o formato que `backup-agent.sh verbo_listar` imprime: uma linha por
-# dump, "<slug>/<arquivo> <bytes> <sha256-ou-sem-hash>".
+# arquivo, "<slug>/<arquivo> <bytes> <sha256-ou-sem-hash>". O tipo e a
+# extensão andam juntos (`_EXTENSAO_DO_TIPO`); o par trocado é recusado em
+# `listar_remoto`.
 _PADRAO_LISTAGEM = re.compile(
-    r"^(?P<slug>[a-z_]+)/(?P<arquivo>[a-z_]+_banco_(?P<carimbo>\d{8}_\d{6})\.dump)"
+    r"^(?P<slug>[a-z_]+)/(?P<arquivo>[a-z_]+_(?P<tipo>banco|volume)_"
+    r"(?P<carimbo>\d{8}_\d{6})\.(?P<extensao>dump|tar\.gz))"
     r" (?P<bytes>\d+) (?P<sha256>[0-9a-f]{64}|sem-hash)$"
 )
+_EXTENSAO_DO_TIPO = {"banco": "dump", "volume": "tar.gz"}
+
+# `listar` sozinho devolve só os dumps: é o que o BackupRestore anterior a
+# 02/10/2026 entende, e ele recusa a sincronização inteira diante de uma linha
+# desconhecida. Este pede também as cópias de volume. O agente anterior ignora
+# o argumento e responde só os dumps, então a ordem de atualização dos dois
+# lados não importa.
+COMANDO_LISTAR = "listar tudo"
 
 
 class FalhaDeSincronizacao(RuntimeError):
@@ -117,12 +130,15 @@ class FalhaDeSincronizacao(RuntimeError):
 
 @dataclass
 class DumpRemoto:
+    """Um arquivo da listagem do servidor: dump de banco ou cópia de volume."""
+
     slug_servidor: str
     arquivo: str
     caminho_remoto: str  # "<slug>/<arquivo>" — o que enviar/apagar esperam
     bytes: int
     sha256: str
     carimbo: str
+    tipo: str = "banco"  # "banco" ou "volume": a pasta e a releitura dependem dele
 
 
 @dataclass
@@ -190,7 +206,7 @@ def _alvo_configurado(servidor: str) -> dict[str, str]:
 
 
 def listar_remoto(alvo: dict[str, str]) -> list[DumpRemoto]:
-    processo = _ssh(alvo, "listar")
+    processo = _ssh(alvo, COMANDO_LISTAR)
     if processo.returncode != 0:
         raise FalhaDeSincronizacao(f"listar falhou: {motor._erro(processo)}")
 
@@ -200,7 +216,7 @@ def listar_remoto(alvo: dict[str, str]) -> list[DumpRemoto]:
         if not linha:
             continue
         m = _PADRAO_LISTAGEM.match(linha)
-        if not m:
+        if not m or _EXTENSAO_DO_TIPO[m["tipo"]] != m["extensao"]:
             raise FalhaDeSincronizacao(f"linha de 'listar' com formato inesperado: {linha!r}")
         dumps.append(DumpRemoto(
             slug_servidor=m["slug"],
@@ -209,6 +225,7 @@ def listar_remoto(alvo: dict[str, str]) -> list[DumpRemoto]:
             bytes=int(m["bytes"]),
             sha256=m["sha256"],
             carimbo=m["carimbo"],
+            tipo=m["tipo"],
         ))
     return dumps
 
@@ -233,7 +250,8 @@ def _apagar_remoto(alvo: dict[str, str], dump: DumpRemoto) -> str:
         return f"aviso:{erro}"
     if processo.returncode == 0:
         return "apagado"
-    if "é o dump mais recente" in motor._erro(processo):
+    # "é o dump mais recente de X" ou "é a cópia de volume mais recente de X".
+    if "mais recente de" in motor._erro(processo):
         return "mantido"
     return f"aviso:{motor._erro(processo)}"
 
@@ -312,7 +330,7 @@ def sincronizar_projeto(projeto: Projeto, execucao_id: int | None = None) -> Res
                 )
                 continue
 
-            final = caminho_sob_raiz("projects", projeto.slug, "banco", dump.arquivo)
+            final = caminho_sob_raiz("projects", projeto.slug, dump.tipo, dump.arquivo)
             if os.path.exists(final):
                 resultado.ja_existentes += 1
             elif not _buscar_e_catalogar(projeto, alvo, dump, execucao_id):
@@ -382,18 +400,25 @@ def _buscar_e_catalogar(
                 f"SHA-256 não confere para {dump.arquivo}: "
                 f"esperado {dump.sha256[:16]}…, recebido {digest[:16]}…"
             )
-        verificar_dump_no_sandbox(tmp)
+        if dump.tipo == "volume":
+            # Não precisa do sandbox: é gzip e tar, relidos aqui mesmo.
+            try:
+                motor.verificar_volume(tmp)
+            except motor.FalhaDeBackup as erro:
+                raise FalhaDeSincronizacao(f"{dump.arquivo}: {erro}") from erro
+        else:
+            verificar_dump_no_sandbox(tmp)
 
         tamanho = os.path.getsize(tmp)
         duracao = int((time.monotonic() - inicio) * 1000)
         criado_em = _criado_em_do_carimbo(dump.carimbo)
-        final = caminho_sob_raiz("projects", projeto.slug, "banco", dump.arquivo)
-        motor._pasta_destino(projeto, "banco")
+        final = caminho_sob_raiz("projects", projeto.slug, dump.tipo, dump.arquivo)
+        motor._pasta_destino(projeto, dump.tipo)
         motor._promover(
             tmp, final,
             {
                 "projeto": projeto.slug,
-                "tipo": "banco",
+                "tipo": dump.tipo,
                 "arquivo": dump.arquivo,
                 "criado_em": criado_em,
                 "bytes": tamanho,
@@ -403,7 +428,7 @@ def _buscar_e_catalogar(
             },
         )
         banco.registrar_artefato(
-            projeto=projeto.slug, tipo="banco",
+            projeto=projeto.slug, tipo=dump.tipo,
             caminho_relativo=motor._relativo(final),
             bytes_=tamanho, sha256=digest, duracao_ms=duracao,
             execucao_id=execucao_id, criado_em=criado_em,

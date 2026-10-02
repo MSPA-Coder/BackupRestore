@@ -37,7 +37,7 @@ from projetos import (
 )
 
 USUARIO_SANDBOX = "sandbox"
-ROTULOS = {"banco": "Banco de dados", "codigo": "Código"}
+ROTULOS = {"banco": "Banco de dados", "codigo": "Código", "volume": "Volume"}
 
 # A tarefa agendada roda todo dia. Dois dias sem nenhuma execução no catálogo
 # não é falha registrada — é ausência de registro, que foi exatamente como uma
@@ -162,6 +162,13 @@ def _dias_desde(momento: str | None) -> int | None:
         return None
 
 
+def _completo(projeto, resumo: dict) -> bool:
+    """Completo é ter o último artefato de cada tipo que o projeto produz,
+    não banco e código incondicionalmente: o projeto do VPS não tem código, e
+    o do Wealthfolio não tem banco, só volume."""
+    return all(resumo.get(tipo) for tipo in projeto.tipos)
+
+
 @app.get("/")
 def painel():
     resumos = {p.slug: banco.resumo_projeto(p.slug) for p in PROJETOS}
@@ -175,6 +182,7 @@ def painel():
         "painel.html",
         projetos=PROJETOS,
         resumos=resumos,
+        completos={p.slug: _completo(p, resumos[p.slug]) for p in PROJETOS},
         falhas=falhas,
         dias_sem_execucao=dias_sem_execucao,
         silencio=dias_sem_execucao is None or dias_sem_execucao >= DIAS_DE_SILENCIO_ATE_ALERTAR,
@@ -202,18 +210,20 @@ def projeto(slug: str):
         alvo = por_slug(slug)
     except KeyError:
         abort(404)
-    tipo = request.args.get("tipo", "banco")
-    if tipo not in ROTULOS:
-        tipo = "banco"
-
     todos = banco.listar_artefatos(slug, limite=500)
     contagens = {t: len([a for a in todos if a["tipo"] == t and a["finalidade"] == "regular"])
                  for t in ROTULOS}
+    # Uma aba por tipo que o projeto produz, mais a de qualquer tipo que tenha
+    # artefato mesmo assim (nada no catálogo fica sem tela).
+    abas = {t: r for t, r in ROTULOS.items() if t in alvo.tipos or contagens[t]}
+    tipo = request.args.get("tipo", alvo.tipos[0])
+    if tipo not in abas:
+        tipo = alvo.tipos[0]
     return render_template(
         "projeto.html",
         projeto=alvo,
         tipo=tipo,
-        rotulos=ROTULOS,
+        rotulos=abas,
         contagens=contagens,
         artefatos=[a for a in todos if a["tipo"] == tipo],
         resumo=banco.resumo_projeto(slug),

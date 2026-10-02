@@ -72,19 +72,20 @@
 
 {% macro tabela(grupo) %}
   <div class="table">
-    <div class="project-row"><span>Projeto</span><span>Banco</span><span>Código</span><span>Estado</span></div>
+    <div class="project-row"><span>Projeto</span><span>Dados</span><span>Código</span><span>Estado</span></div>
     {% for p in grupo %}
       {% set r = resumos[p.slug] %}
       {% set ultima = r.ultima_execucao %}
-      {# "codigo" não existe para todo projeto — completo é ter o
-         que o projeto realmente produz, não banco+código incondicionalmente. #}
-      {% set completo = r.banco and ('codigo' not in p.tipos or r.codigo) %}
+      {% set completo = completos[p.slug] %}
+      {# A coluna "Dados" é o banco, ou o volume no projeto que não tem banco
+         (o Wealthfolio, um SQLite). #}
+      {% set dados = 'volume' if 'volume' in p.tipos and 'banco' not in p.tipos else 'banco' %}
       <div class="project-row">
         <div>
           <div class="project-name">{{ p.nome }}</div>
           <div class="project-path" title="{{ p.caminho }}">{{ p.caminho }}</div>
         </div>
-        {% for tipo in ['banco', 'codigo'] %}
+        {% for tipo in [dados, 'codigo'] %}
           <div>
             <span class="cell-label">{{ tipo | capitalize }}</span>
             <span class="cell-value">
