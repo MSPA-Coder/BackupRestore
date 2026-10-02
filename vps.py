@@ -37,6 +37,7 @@ import os
 import re
 import shlex
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass, field
 
@@ -94,6 +95,11 @@ TEMPO_LIMITE_ENVIO = 600
 #    levanta `FalhaDeSincronizacao` e nada é lido.
 # 4. `configuracao.caminho_sob_raiz`, que resolve o caminho (seguindo links
 #    simbólicos) e recusa qualquer destino fora da raiz de backup.
+#
+# Desde 02/10/2026 o arquivo temporário da busca tem nome local e aleatório
+# (`tempfile.mkstemp` em `_buscar_e_catalogar`): o nome listado pelo agente só
+# chega ao destino final, que passa pela barreira 4. A releitura da cópia de
+# volume, nova, já nasceu sem esse alerta.
 #
 # Comentário `# codeql[...]` NÃO resolve: o code scanning do GitHub ignora
 # supressão por comentário (só a CLI do CodeQL a honra) — testado neste
@@ -388,8 +394,14 @@ def _buscar_e_catalogar(
 ) -> bool:
     """Busca, confere e cataloga um dump. Devolve se deu certo; nunca deixa
     um `.tmp` para trás, dê certo ou não."""
-    motor._pasta_temp()
-    tmp = caminho_sob_raiz("temp", dump.arquivo + ".tmp")
+    # O temporário tem nome local e aleatório, que não depende do texto que o
+    # agente listou: a busca, o SHA-256 e a releitura trabalham sobre ele, e
+    # nenhum desses passos precisa confiar no nome que veio do servidor. Só o
+    # nome final o usa, depois de `caminho_sob_raiz` conferir o destino.
+    descritor, tmp = tempfile.mkstemp(
+        prefix=f"{projeto.slug}_", suffix=".tmp", dir=motor._pasta_temp()
+    )
+    os.close(descritor)
     inicio = time.monotonic()
     try:
         enviar_remoto(alvo, dump, tmp)

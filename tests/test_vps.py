@@ -299,12 +299,14 @@ class BuscarECatalogarTests(unittest.TestCase):
         evento.assert_called_once()
 
 
+NOME_COPIA = "wealthfolio_teste_volume_20261002_060000.tar.gz"
+
+
 class BuscarCopiaDeVolumeTests(unittest.TestCase):
     def _copia(self, conteudo: bytes) -> vps.DumpRemoto:
-        nome = "wealthfolio_teste_volume_20261002_060000.tar.gz"
         return vps.DumpRemoto(
-            slug_servidor="wealthfolio_teste", arquivo=nome,
-            caminho_remoto=f"wealthfolio_teste/{nome}", bytes=len(conteudo),
+            slug_servidor="wealthfolio_teste", arquivo=NOME_COPIA,
+            caminho_remoto=f"wealthfolio_teste/{NOME_COPIA}", bytes=len(conteudo),
             sha256=hashlib.sha256(conteudo).hexdigest(), carimbo="20261002_060000",
             tipo="volume",
         )
@@ -325,17 +327,17 @@ class BuscarCopiaDeVolumeTests(unittest.TestCase):
             patch.object(banco, "registrar_evento") as evento,
         ):
             ok = vps._buscar_e_catalogar(WEALTHFOLIO, ALVO, copia, execucao_id=9)
-        final = configuracao.caminho_sob_raiz(
-            "projects", WEALTHFOLIO.slug, "volume", copia.arquivo
-        )
+        final = Path(diretorio, "backups", "projects", WEALTHFOLIO.slug, "volume", NOME_COPIA)
         return ok, final, registrar, evento
 
     def test_copia_integra_e_catalogada_como_volume_sem_sandbox(self) -> None:
         with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
             ok, final, registrar, _ = self._buscar(diretorio, COPIA_BOA)
             self.assertTrue(ok)
-            self.assertTrue(os.path.exists(final), "fica em projects/<slug>/volume/")
-            manifesto = json.loads(Path(final + ".manifest.json").read_text(encoding="utf-8"))
+            self.assertTrue(final.exists(), "fica em projects/<slug>/volume/")
+            manifesto = json.loads(
+                final.with_name(final.name + ".manifest.json").read_text(encoding="utf-8")
+            )
         self.assertEqual(manifesto["tipo"], "volume")
         self.assertEqual(registrar.call_args.kwargs["tipo"], "volume")
         self.assertEqual(registrar.call_args.kwargs["projeto"], WEALTHFOLIO.slug)
@@ -345,7 +347,7 @@ class BuscarCopiaDeVolumeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
             ok, final, registrar, evento = self._buscar(diretorio, cortada)
             self.assertFalse(ok)
-            self.assertFalse(os.path.exists(final))
+            self.assertFalse(final.exists())
             self.assertEqual(list(Path(diretorio, "backups", "temp").glob("*.tmp")), [])
         registrar.assert_not_called()
         self.assertEqual(evento.call_args.args[0], "sincronizacao.reprovado")
