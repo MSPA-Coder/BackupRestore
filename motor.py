@@ -329,9 +329,9 @@ def verificar_volume(caminho: str) -> None:
        vem de outra máquina e um dia é extraída num disco de verdade.
     3. Há ao menos um arquivo regular? Cópia de volume vazio não serve de
        backup, e pela retenção poderia virar a única que sobrou.
+
+    Arquivo de zero byte cai no `tarfile.open`, que recusa arquivo vazio.
     """
-    if os.path.getsize(caminho) == 0:
-        raise FalhaDeBackup("cópia de volume vazia")
     try:
         with gzip.open(caminho, "rb") as fluxo:
             while fluxo.read(1024 * 1024):
