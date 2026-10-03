@@ -34,9 +34,29 @@ Ele também não é insubstituível: cada artefato carrega ao lado um
 `sha256` — que é exatamente o que `banco.registrar_artefato` grava. O catálogo
 é reconstruível varrendo a raiz de backup e relendo esses manifestos.
 
-**Não existe hoje um comando que faça essa reconstrução.** Enquanto não
-existir, perder o catálogo custa escrever o script na hora do aperto. Se isso
-parecer caro demais, a saída é criar o comando — não pôr o banco no kit.
+O comando existe (desde 03/10/2026):
+
+```bash
+python cli.py reconstruir-catalogo            # simula: mostra o que catalogaria
+python cli.py reconstruir-catalogo --aplicar  # grava
+```
+
+Ele varre `projects/<projeto>/<tipo>/` e cataloga o que tem manifesto ao lado,
+**depois de reler cada artefato como o backup normal faz**: tamanho e SHA-256
+contra o manifesto, e `pg_restore --list` no sandbox (dumps), teste do ZIP ou
+leitura do `.tar.gz` (volume). O manifesto é uma afirmação, não uma prova:
+artefato adulterado, sem manifesto, com manifesto de outro lugar ou que a
+releitura reprove **não entra**, e o dump fica "não verificado" (sem registro)
+se o sandbox não estiver de pé. Nada é apagado nem movido.
+
+O que não volta: a marca de **fixado** (não está no manifesto; fixe de novo
+antes do próximo backup, porque a retenção roda ao fim dele), o histórico de
+execuções e eventos, e os dumps de segurança de restauração
+(`pre_restauracao`, sem manifesto). Pasta de projeto que o `projetos.py` não
+conhece é listada e ignorada (hoje, as 36 cópias do NetWorth, que continuam no
+disco mas não voltam ao catálogo). Conferido em 03/10/2026 contra o acervo real:
+das 471 linhas válidas do catálogo, 384 foram reconstruídas idênticas em todos
+os campos; as 87 restantes são as 51 de segurança e essas 36 do NetWorth.
 
 O arquivo de ambiente do MpPortal chama-se `.env`; todos os outros usam
 `.env.docker`. Procurar o nome dos demais ali nao acha nada.

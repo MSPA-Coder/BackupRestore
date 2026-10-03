@@ -37,6 +37,7 @@ python cli.py backup --todos          # o que o Agendador chama (só os projetos
 python cli.py sincronizar-vps --todos # Camada 2: busca, verifica e cataloga os dumps dos VPS
 python cli.py listar                  # catálogo
 python cli.py verificar               # relê os arquivos e confere SHA-256
+python cli.py reconstruir-catalogo    # recria o catálogo dos manifestos (simula; --aplicar grava)
 python cli.py ensaio --projeto mega_sena   # restaura no sandbox e compara com a origem
 scripts\\ensaio-mensal.ps1                 # verifica e ensaia local + VPS
 python web.py                         # interface em http://127.0.0.1:5401

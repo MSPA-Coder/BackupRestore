@@ -3,6 +3,7 @@
     python cli.py backup --todos
     python cli.py listar
     python cli.py verificar
+    python cli.py reconstruir-catalogo [--aplicar]
     python cli.py ensaio --projeto conforto_termico
 
 A interface usa exatamente as mesmas funções; nada de execução vive nela.
@@ -16,6 +17,7 @@ import sys
 
 import banco
 import motor
+import reconstruir
 import restaurar as restauracao
 import vps
 from projetos import (
@@ -91,6 +93,33 @@ def comando_verificar(args: argparse.Namespace) -> int:
     return 1 if (
         contagem["ausentes"] or contagem["corrompidos"] or contagem["nao_verificados"]
     ) else 0
+
+
+def comando_reconstruir_catalogo(args: argparse.Namespace) -> int:
+    """Recria no catálogo as linhas dos artefatos que estão no disco com manifesto.
+
+    Simula por padrão; `--aplicar` grava, e só o que passa pela mesma releitura
+    do backup normal (ver `reconstruir.py`)."""
+    relatorio = reconstruir.reconstruir(aplicar=args.aplicar, projeto_slug=args.projeto)
+    verbo = "catalogados" if relatorio.aplicado else "seriam catalogados (simulação)"
+    print(f"   {verbo}: {len(relatorio.registrados)}")
+    print(f"   já estavam no catálogo: {len(relatorio.ja_catalogados)}")
+    for rotulo in relatorio.registrados:
+        print(f"      + {rotulo}")
+    for rotulo, motivo in relatorio.rejeitados:
+        print(f"   REJEITADO {rotulo}: {motivo}", file=sys.stderr)
+    for rotulo in relatorio.nao_verificados:
+        print(f"   NÃO VERIFICADO {rotulo}", file=sys.stderr)
+    for rotulo in relatorio.ignorados:
+        print(f"   ignorado: {rotulo}")
+    if relatorio.aplicado and relatorio.registrados:
+        print(
+            "   Lembrete: a marca de 'fixado' não volta (não está no manifesto). "
+            "Fixe de novo o que precisar antes do próximo backup."
+        )
+    if not relatorio.aplicado and relatorio.registrados:
+        print("   Nada foi gravado. Rode de novo com --aplicar para catalogar.")
+    return 0 if relatorio.limpo else 1
 
 
 def comando_configurar_raiz(args: argparse.Namespace) -> int:
@@ -328,6 +357,14 @@ def main(argv: list[str] | None = None) -> int:
         help="nome do servidor, o mesmo do campo `servidor` em projetos.py (padrão: principal)",
     )
     p.set_defaults(funcao=comando_configurar_vps)
+
+    p = sub.add_parser(
+        "reconstruir-catalogo",
+        help="recria o catálogo a partir dos manifestos ao lado dos artefatos (simula por padrão)",
+    )
+    p.add_argument("--aplicar", action="store_true", help="grava no catálogo (sem isto, só simula)")
+    p.add_argument("--projeto", help="limita a um projeto (slug)")
+    p.set_defaults(funcao=comando_reconstruir_catalogo)
 
     p = sub.add_parser("restaurar", help="restaura um dump somente no sandbox descartável")
     p.add_argument("--artefato", type=int, required=True)
