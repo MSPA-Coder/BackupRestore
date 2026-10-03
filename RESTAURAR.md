@@ -16,6 +16,7 @@ usa Python para a extração.
 <raiz-configurada>\projects\<projeto>\
     banco\            <projeto>_banco_<data>.dump      (pg_dump --format=custom)
     codigo\           <projeto>_codigo_<data>.zip      (arquivos não ignorados pelo Git)
+    volume\           <slug>_volume_<data>.tar.gz      (diretório de dados de um contêiner, só VPS)
     pre_restauracao\  <projeto>_seguranca_<data>.dump  (dumps automáticos pré-restauração)
 ```
 
@@ -34,8 +35,10 @@ do VPS, buscado e verificado pela Camada 2 (`vps.py`/`cli.py sincronizar-vps`)
 — não existe pasta `codigo\` para eles, porque o código do VPS é espelho do
 `main` no GitHub (não um artefato deste sistema; ver "Reconstrução completa"
 abaixo). `<projeto>` vira `conforto_termico_vps`, `mega_sena_vps`,
-`controle_bancario_vps`, `controle_renda_variavel_vps` e `mp_portal_vps` — este
-último vem do VPS dedicado do portal. O `.manifest.json` de
+`controle_bancario_vps`, `controle_renda_variavel_vps`, `wealthfolio_teste_vps`
+e `mp_portal_vps` — este último vem do VPS dedicado do portal. O Wealthfolio
+não tem dump: tem `volume\`, com o procedimento próprio descrito em "Wealthfolio a
+partir da cópia do volume", abaixo. O `.manifest.json` de
 um dump VPS tem `"origem": {"servidor": ..., "arquivo_remoto": ...}` em vez de
 `{"container": ..., "banco": ...}` — é assim que se distingue um artefato
 produzido aqui de um buscado de lá.
@@ -115,6 +118,49 @@ local** — veja a seção "VPS (produção)" em
 
 ---
 
+## Wealthfolio a partir da cópia do volume
+
+O Wealthfolio guarda tudo num diretório (`/data` no contêiner, volume
+`wealthfolio-teste-data`): o SQLite cifrado, o `-wal` dele e o cofre de
+segredos, onde ficam os tokens do add-on para o CB e o CRV. O VPS copia esse
+diretório todo dia com o contêiner pausado por segundos
+(`_manutencao/vps/backup-db.sh`), e o `sincronizar-vps` traz a cópia para
+`projects\wealthfolio_teste_vps\volume\`.
+
+**Sem a chave mestra, a cópia não abre.** O banco e o cofre são cifrados com o
+arquivo apontado por `WF_SECRET_KEY_HOST_PATH` (ver
+[KIT_RECUPERACAO.md](KIT_RECUPERACAO.md)). Confira que o kit tem a chave antes
+de qualquer outro passo.
+
+**1. Imagem.** O `compose.yaml` do WealthfolioTeste constrói a imagem de uma
+pasta fora do Git (`../CodexTemp/wealthfolio-v3.9.1`). Num servidor novo,
+baixe o Wealthfolio `v3.9.1` nesse caminho e aplique
+`scripts/apply-upstream-patches.sh` antes do `docker compose build`.
+
+**2. Configuração.** Recoloque o `.env` e a chave mestra do kit, com o
+`WF_SECRET_KEY_HOST_PATH` apontando para a chave.
+
+**3. Volume.** Com o serviço parado (`docker compose stop wealthfolio`, ou ainda
+não criado), copie o `.tar.gz` para o servidor e extraia no volume. O arquivo
+tem o diretório `data/` na raiz, como o `docker cp` o produziu:
+
+```bash
+docker volume create wealthfolio-teste-data
+docker run --rm -v wealthfolio-teste-data:/data -v "$PWD:/copia:ro" alpine:3 \
+    sh -c 'find /data -mindepth 1 -delete && tar -xzf /copia/<arquivo>.tar.gz -C /'
+```
+
+O `find ... -delete` esvazia o volume antes: sobra de um banco anterior junto
+com o `-wal` da cópia é exatamente a mistura que a pausa existe para evitar.
+
+**4. Subir e conferir.** `docker compose up -d` (no VPS, com o
+`compose.patrimonio-internal.yaml`, como faz o `deploy.sh`), entrar com a senha
+de sempre e conferir contas, histórico e a tela do add-on. Se o CB ou o CRV
+tiverem trocado o `patrimonio_integration_token` depois da data da cópia, cole
+o valor atual na tela do add-on.
+
+---
+
 ## Conferir um artefato antes de confiar nele
 
 O host não tem `pg_restore` — e não precisa ter. Qualquer contêiner
@@ -123,9 +169,12 @@ O host não tem `pg_restore` — e não precisa ter. Qualquer contêiner
 ```bash
 docker exec -i backuprestore-sandbox pg_restore --list < arquivo.dump
 python -c "import zipfile; print(zipfile.ZipFile(r'arquivo.zip').testzip())"
+tar -tzvf arquivo.tar.gz
 ```
 
-Os dois comandos precisam terminar sem erro antes que o artefato seja aceito.
+Os três comandos precisam terminar sem erro antes que o artefato seja aceito.
+O `tar` vem com o Windows 10 em diante; o `verificar` faz a mesma releitura da
+cópia de volume em Python, sem Docker.
 
 Para conferir tudo de uma vez contra o SHA-256 do catálogo:
 
@@ -168,7 +217,9 @@ origem do dump.
   fora quando forem ignorados pelo projeto.
 - **Os volumes Docker em si.** Restaura-se o *conteúdo* dos bancos via dump, não
   seus volumes. Dumps são portáveis entre versões e máquinas, mas outros
-  volumes precisam de uma estratégia própria.
+  volumes precisam de uma estratégia própria. A exceção é o do Wealthfolio,
+  que não tem banco à parte: ele é copiado inteiro (`volume\`, acima), e é a
+  aplicação que declara isso, com o rótulo `mspa.backup.volume` no Compose.
 - **Comprovantes do Controle Bancário.** Os arquivos ficam em `media_volume`;
   o dump contém referências do banco, não o conteúdo enviado. Preserve-os pela
   cópia independente descrita no kit.

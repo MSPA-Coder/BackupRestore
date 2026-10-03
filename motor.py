@@ -10,8 +10,8 @@ As sete regras que este módulo implementa, e por que cada uma existe:
    que é atômico no mesmo volume. Um dump interrompido no meio nunca pode deixar
    um arquivo truncado com cara de dump bom.
 2. Verificar antes de confiar — código de saída zero não prova nada. Todo
-   artefato é lido de volta (`pg_restore --list`, `testzip`) antes de ser
-   aceito.
+   artefato é lido de volta (`pg_restore --list`, `testzip`, e a cópia de
+   volume do VPS por inteiro, em `verificar_volume`) antes de ser aceito.
 3. Nunca apagar antes de ter o substituto — a retenção roda depois de tudo
    verificado, e nunca remove o último artefato válido de um tipo.
 4. Devolver o contêiner ao estado em que estava — em `finally`, inclusive quando
@@ -32,14 +32,17 @@ pode estar parado, e para projeto de origem VPS ele nem existe neste host.
 from __future__ import annotations
 
 import datetime
+import gzip
 import hashlib
 import json
 import os
 import shutil
 import subprocess
+import tarfile
 import threading
 import time
 import zipfile
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import PurePosixPath
@@ -311,6 +314,43 @@ def verificar_zip_codigo(caminho: str) -> None:
         raise FalhaDeBackup(f"zip de código ilegível: {erro}") from erro
 
 
+def verificar_volume(caminho: str) -> None:
+    """Relê a cópia de um volume (`.tar.gz` feito no VPS com o contêiner
+    pausado) sem precisar de Docker.
+
+    Três perguntas, nesta ordem:
+
+    1. O gzip chega ao fim? O CRC fica no fim do fluxo, e o `tarfile` pode
+       parar de ler antes dele; por isso o fluxo é lido inteiro à parte.
+    2. Cada membro passaria pelo filtro `data` do `tarfile`, o mesmo que a
+       extração da restauração usa? Recusa `..`, link que aponta para fora e
+       arquivo especial. Caminho absoluto o filtro só corrigiria (tira a
+       barra), mas o `docker cp` nunca o produz: aqui ele é recusado. A cópia
+       vem de outra máquina e um dia é extraída num disco de verdade.
+    3. Há ao menos um arquivo regular? Cópia de volume vazio não serve de
+       backup, e pela retenção poderia virar a única que sobrou.
+
+    Arquivo de zero byte cai no `tarfile.open`, que recusa arquivo vazio.
+    """
+    try:
+        with gzip.open(caminho, "rb") as fluxo:
+            while fluxo.read(1024 * 1024):
+                pass
+        regulares = 0
+        with tarfile.open(caminho, "r:gz") as pacote:
+            for membro in pacote:
+                if membro.name.startswith("/"):
+                    raise FalhaDeBackup(f"membro com caminho absoluto: {membro.name}")
+                tarfile.data_filter(membro, "/restauracao")
+                regulares += membro.isfile()
+    except tarfile.FilterError as erro:
+        raise FalhaDeBackup(f"membro inseguro na cópia de volume: {erro}") from erro
+    except (OSError, EOFError, zlib.error, tarfile.TarError) as erro:
+        raise FalhaDeBackup(f"cópia de volume ilegível: {erro}") from erro
+    if not regulares:
+        raise FalhaDeBackup("cópia de volume sem nenhum arquivo")
+
+
 def aplicar_retencao(projeto: Projeto, tipo: str) -> int:
     """Roda só depois que o artefato novo já foi verificado e registrado."""
     validos = banco.artefatos_validos(projeto.slug, tipo)
@@ -405,7 +445,11 @@ def fazer_backup(
     aconteça o que acontecer."""
     tipos = tipos or projeto.tipos
     desconhecidos = set(tipos) - {"banco", "codigo"}
-    if desconhecidos:
+    # Só para projeto local. O de outro ambiente é recusado logo abaixo, pela
+    # trava que fecha a execução: o botão "Novo backup" da interface a abre
+    # antes de chamar esta função, e o projeto de volume do VPS (o Wealthfolio,
+    # `tipos=("volume",)`) cairia aqui primeiro e a deixaria presa em "fila".
+    if desconhecidos and projeto.ambiente == "local":
         raise FalhaDeBackup(
             f"tipo(s) de backup inválido(s): {', '.join(sorted(desconhecidos))}"
         )
@@ -548,6 +592,8 @@ def verificar(projeto_slug: str | None = None) -> dict[str, int]:
                 _reler_dump(CONTAINER_SANDBOX, caminho)
             elif linha["tipo"] == "codigo":
                 verificar_zip_codigo(caminho)
+            elif linha["tipo"] == "volume":
+                verificar_volume(caminho)
         except FalhaDeBackup:
             return "corrompidos", "corrompido"
         return "conferidos", "valido"

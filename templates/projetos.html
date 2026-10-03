@@ -20,7 +20,8 @@
     <p class="project-slug">{{ p.slug }}</p>
     <p class="project-path" title="{{ p.caminho }}">{{ p.caminho }}</p>
     <dl class="project-facts">
-      <div><dt>Banco</dt><dd>{% if r.banco %}Último {{ r.banco.criado_em | momento }}{% else %}Sem backup{% endif %}</dd></div>
+      {% if 'banco' in p.tipos or 'volume' not in p.tipos %}<div><dt>Banco</dt><dd>{% if r.banco %}Último {{ r.banco.criado_em | momento }}{% else %}Sem backup{% endif %}</dd></div>{% endif %}
+      {% if 'volume' in p.tipos %}<div><dt>Volume</dt><dd>{% if r.volume %}Último {{ r.volume.criado_em | momento }}{% else %}Sem backup{% endif %}</dd></div>{% endif %}
       <div><dt>Código</dt><dd>{% if 'codigo' not in p.tipos %}Não se aplica{% elif r.codigo %}Último {{ r.codigo.criado_em | momento }}{% else %}Sem backup{% endif %}</dd></div>
       <div><dt>Retenção</dt><dd>{{ p.retencao }} por tipo</dd></div>
     </dl>

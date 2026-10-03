@@ -10,14 +10,15 @@ Docker.
 
 - `README.md`: instalacao, operacao e formato dos artefatos.
 - `RESTAURAR.md`: recuperacao manual e limites do backup.
-- `projetos.py`: os nove projetos (quatro locais e cinco de origem VPS, campos
+- `projetos.py`: os dez projetos (quatro locais e seis de origem VPS, campos
   `ambiente` e `servidor`) e os containers protegidos.
 - `motor.py` e `restaurar.py`: contratos de integridade e restauracao dos
   projetos locais.
-- `vps.py`: Camada 2 — busca, verifica e cataloga dumps dos VPS por SSH (um
-  alvo por servidor, gravado por `cli.py configurar-vps`) via um agente
-  restrito no servidor (`listar`/`enviar`/`apagar`/`estado`); nunca
-  dispara `pg_dump` remoto nem toca em container de producao.
+- `vps.py`: Camada 2 — busca, verifica e cataloga dumps e copias de volume
+  (`.tar.gz`, o SQLite do Wealthfolio) dos VPS por SSH (um alvo por servidor,
+  gravado por `cli.py configurar-vps`) via um agente restrito no servidor
+  (`listar`/`enviar`/`apagar`/`estado`); nunca dispara `pg_dump` remoto nem
+  toca em container de producao.
 
 Confirme o comportamento no codigo antes de alterar documentacao. Pedido atual
 do mantenedor e requisitos de seguranca e preservacao de dados prevalecem sobre
@@ -48,7 +49,8 @@ Qualquer mudanca em `motor.py`, `restaurar.py`, `banco.py`, `projetos.py` ou
 
 1. Artefatos nascem em diretorio temporario e so recebem o nome final por troca
    atomica depois de verificados.
-2. Dumps e ZIPs sao relidos; codigo de saida zero, sozinho, nao basta.
+2. Dumps, ZIPs e copias de volume sao relidos; codigo de saida zero, sozinho,
+   nao basta.
 3. Retencao ocorre apenas depois de existir substituto valido e nunca remove o
    ultimo artefato valido de um tipo.
 4. O estado original do container e restaurado em `finally`, inclusive em falha.

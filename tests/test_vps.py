@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import io
+import json
 import os
 import subprocess
 import tempfile
@@ -17,10 +18,12 @@ import cli
 import configuracao
 import motor
 import vps
-from projetos import CONTAINER_SANDBOX, PROJETOS
+from projetos import CONTAINER_SANDBOX, PROJETOS, por_slug
+from tests.test_volume import COPIA_BOA
 
 PROJETO_VPS = next(p for p in PROJETOS if p.ambiente == "vps")
 PROJETO_LOCAL = next(p for p in PROJETOS if p.ambiente == "local")
+WEALTHFOLIO = por_slug("wealthfolio_teste_vps")
 
 ALVO = {"host": "vps.exemplo", "usuario": "ubuntu", "chave": "/chave"}
 
@@ -61,6 +64,38 @@ class ListagemRemotaTests(unittest.TestCase):
         self.assertEqual(dumps[0].arquivo, nome)
         self.assertEqual(dumps[0].bytes, 41264)
         self.assertEqual(dumps[0].carimbo, "20260820_040329")
+
+    def test_parseia_copia_de_volume(self) -> None:
+        nome = "wealthfolio_teste_volume_20261002_060000.tar.gz"
+        linha = f"wealthfolio_teste/{nome} 5120 " + "b" * 64 + "\n"
+        processo = subprocess.CompletedProcess(args=[], returncode=0, stdout=linha.encode(), stderr=b"")
+        with patch.object(vps, "_ssh", return_value=processo):
+            dumps = vps.listar_remoto(ALVO)
+        self.assertEqual(dumps[0].tipo, "volume")
+        self.assertEqual(dumps[0].arquivo, nome)
+        self.assertEqual(dumps[0].caminho_remoto, f"wealthfolio_teste/{nome}")
+        self.assertEqual(dumps[0].carimbo, "20261002_060000")
+
+    def test_tipo_e_extensao_trocados_sao_recusados(self) -> None:
+        for nome in ("x/x_volume_20261002_060000.dump", "x/x_banco_20261002_060000.tar.gz"):
+            processo = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=f"{nome} 1 {'a' * 64}\n".encode(), stderr=b""
+            )
+            with (
+                self.subTest(nome=nome),
+                patch.object(vps, "_ssh", return_value=processo),
+                self.assertRaises(vps.FalhaDeSincronizacao),
+            ):
+                vps.listar_remoto(ALVO)
+
+    def test_pede_ao_agente_tambem_as_copias_de_volume(self) -> None:
+        """`listar` sozinho devolve só os dumps, para não derrubar o cliente
+        antigo; quem sabe ler volume pede `listar tudo`. É o contrato com
+        `_manutencao/vps/backup-agent.sh`."""
+        vazio = subprocess.CompletedProcess(args=[], returncode=0, stdout=b"", stderr=b"")
+        with patch.object(vps, "_ssh", return_value=vazio) as ssh:
+            vps.listar_remoto(ALVO)
+        ssh.assert_called_once_with(ALVO, "listar tudo")
 
     def test_linha_mal_formada_e_recusada(self) -> None:
         processo = subprocess.CompletedProcess(
@@ -104,6 +139,14 @@ class ApagarRemotoTests(unittest.TestCase):
         processo = subprocess.CompletedProcess(
             args=[], returncode=1, stdout=b"",
             stderr="ERRO: recusado: é o dump mais recente de x\n".encode("utf-8"),
+        )
+        with patch.object(vps, "_ssh", return_value=processo):
+            self.assertEqual(vps._apagar_remoto(ALVO, self._dump()), "mantido")
+
+    def test_recusa_da_copia_de_volume_mais_recente_e_mantido(self) -> None:
+        processo = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout=b"",
+            stderr="ERRO: recusado: é a cópia de volume mais recente de x\n".encode("utf-8"),
         )
         with patch.object(vps, "_ssh", return_value=processo):
             self.assertEqual(vps._apagar_remoto(ALVO, self._dump()), "mantido")
@@ -256,6 +299,60 @@ class BuscarECatalogarTests(unittest.TestCase):
         evento.assert_called_once()
 
 
+NOME_COPIA = "wealthfolio_teste_volume_20261002_060000.tar.gz"
+
+
+class BuscarCopiaDeVolumeTests(unittest.TestCase):
+    def _copia(self, conteudo: bytes) -> vps.DumpRemoto:
+        return vps.DumpRemoto(
+            slug_servidor="wealthfolio_teste", arquivo=NOME_COPIA,
+            caminho_remoto=f"wealthfolio_teste/{NOME_COPIA}", bytes=len(conteudo),
+            sha256=hashlib.sha256(conteudo).hexdigest(), carimbo="20261002_060000",
+            tipo="volume",
+        )
+
+    def _buscar(self, diretorio: str, conteudo: bytes):
+        copia = self._copia(conteudo)
+
+        def _enviar_fake(alvo, dump_arg, destino):
+            Path(destino).write_bytes(conteudo)
+
+        with (
+            patch.object(vps, "enviar_remoto", side_effect=_enviar_fake),
+            patch.object(
+                vps, "verificar_dump_no_sandbox",
+                side_effect=AssertionError("cópia de volume não passa pelo pg_restore"),
+            ),
+            patch.object(banco, "registrar_artefato", return_value=1) as registrar,
+            patch.object(banco, "registrar_evento") as evento,
+        ):
+            ok = vps._buscar_e_catalogar(WEALTHFOLIO, ALVO, copia, execucao_id=9)
+        final = Path(diretorio, "backups", "projects", WEALTHFOLIO.slug, "volume", NOME_COPIA)
+        return ok, final, registrar, evento
+
+    def test_copia_integra_e_catalogada_como_volume_sem_sandbox(self) -> None:
+        with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
+            ok, final, registrar, _ = self._buscar(diretorio, COPIA_BOA)
+            self.assertTrue(ok)
+            self.assertTrue(final.exists(), "fica em projects/<slug>/volume/")
+            manifesto = json.loads(
+                final.with_name(final.name + ".manifest.json").read_text(encoding="utf-8")
+            )
+        self.assertEqual(manifesto["tipo"], "volume")
+        self.assertEqual(registrar.call_args.kwargs["tipo"], "volume")
+        self.assertEqual(registrar.call_args.kwargs["projeto"], WEALTHFOLIO.slug)
+
+    def test_copia_que_nao_se_le_ate_o_fim_nao_entra(self) -> None:
+        cortada = COPIA_BOA[: len(COPIA_BOA) // 2]
+        with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
+            ok, final, registrar, evento = self._buscar(diretorio, cortada)
+            self.assertFalse(ok)
+            self.assertFalse(final.exists())
+            self.assertEqual(list(Path(diretorio, "backups", "temp").glob("*.tmp")), [])
+        registrar.assert_not_called()
+        self.assertEqual(evento.call_args.args[0], "sincronizacao.reprovado")
+
+
 class SincronizarProjetoTests(unittest.TestCase):
     def test_recusa_projeto_local_e_fecha_execucao(self) -> None:
         with (
@@ -323,7 +420,7 @@ class SincronizarProjetoTests(unittest.TestCase):
         )
 
         def _ssh_fake(alvo, comando, **kwargs):
-            if comando == "listar":
+            if comando.split()[0] == "listar":  # o agente decide pelo verbo
                 return listar_proc
             if comando.startswith("apagar "):
                 return apagar_proc
@@ -367,7 +464,7 @@ class SincronizarProjetoTests(unittest.TestCase):
         pedidos: list[str] = []
 
         def _ssh_fake(alvo, comando, **kwargs):
-            if comando == "listar":
+            if comando.split()[0] == "listar":  # o agente decide pelo verbo
                 return listar_proc
             if comando.startswith("apagar "):
                 pedidos.append(comando)
@@ -406,7 +503,7 @@ class SincronizarProjetoTests(unittest.TestCase):
         )
 
         def _ssh_fake(alvo, comando, **kwargs):
-            if comando == "listar":
+            if comando.split()[0] == "listar":  # o agente decide pelo verbo
                 return listar_proc
             raise AssertionError(f"não deveria buscar nem apagar um dump sem hash: {comando!r}")
 
@@ -523,11 +620,15 @@ class TestArgumentoParaOShellRemoto(unittest.TestCase):
     def test_todo_nome_aceito_pelo_padrao_atravessa_sem_alteracao(self):
         # Amarra o escape ao formato que `_PADRAO_LISTAGEM` aceita: enquanto os
         # dois combinarem, o escape é identidade e o agente nunca vê aspas.
-        linha = "x_y/x_y_banco_20260820_031500.dump 123 " + "a" * 64
-        m = vps._PADRAO_LISTAGEM.match(linha)
-        self.assertIsNotNone(m)
-        caminho = f"{m['slug']}/{m['arquivo']}"
-        self.assertEqual(vps._argumento(caminho), caminho)
+        for linha in (
+            "x_y/x_y_banco_20260820_031500.dump 123 " + "a" * 64,
+            "x_y/x_y_volume_20261002_060000.tar.gz 123 " + "a" * 64,
+        ):
+            with self.subTest(linha=linha):
+                m = vps._PADRAO_LISTAGEM.match(linha)
+                self.assertIsNotNone(m)
+                caminho = f"{m['slug']}/{m['arquivo']}"
+                self.assertEqual(vps._argumento(caminho), caminho)
 
     def test_metacaractere_de_shell_vira_palavra_literal(self):
         # Nome que só existiria se o servidor tivesse sido comprometido: o

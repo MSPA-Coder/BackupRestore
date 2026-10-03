@@ -3,7 +3,8 @@
 Backup dos projetos locais e ensaio de restauração em sandbox: dump PostgreSQL
 e ZIP de código por projeto, com verificação de integridade. Também busca,
 verifica e cataloga os dumps que os VPS de produção já produzem sozinhos
-(Camada 2 do backup de produção) — nunca dispara `pg_dump` remoto nem toca em
+(Camada 2 do backup de produção), e a cópia do diretório de dados do
+Wealthfolio, que não tem Postgres — nunca dispara `pg_dump` remoto nem toca em
 contêiner de produção.
 
 Roda no host (Python >=3.13; Python 3.14 atualmente testado, com Flask). Não é
@@ -42,14 +43,14 @@ python web.py                         # interface em http://127.0.0.1:5401
 ```
 
 Os quatro projetos locais produzem o próprio backup (contêiner Docker). Os
-cinco projetos `_vps` não — a produção acontece sozinha em cada servidor
+seis projetos `_vps` não — a produção acontece sozinha em cada servidor
 (`_manutencao/vps/backup-db.sh`, systemd timer) e o `sincronizar-vps` só
 busca, verifica e cataloga o que já existe lá, pelo agente restrito
 (`_manutencao/vps/backup-agent.sh`).
 
-São dois servidores: o principal, com os quatro aplicativos, e o do portal
-(`mp_portal_vps`). O campo `servidor` de cada projeto em `projetos.py` diz de
-qual deles o dump vem. Configure cada alvo uma vez:
+São dois servidores: o principal, com os quatro aplicativos e o Wealthfolio, e
+o do portal (`mp_portal_vps`). O campo `servidor` de cada projeto em
+`projetos.py` diz de qual deles o dump vem. Configure cada alvo uma vez:
 
 ```powershell
 python cli.py configurar-vps <host> --usuario ubuntu --chave 'C:\caminho\da\chave-dedicada'
@@ -61,7 +62,9 @@ A mesma chave dedicada pode servir aos dois servidores: em cada um ela entra no
 
 O agente do servidor só sabe quatro verbos (`listar`, `enviar`, `apagar`,
 `estado`) — este cliente nunca dispara `pg_dump` remoto nem toca em contêiner
-de produção.
+de produção. A listagem é pedida como `listar tudo`, que inclui as cópias de
+volume; o agente anterior ignora o argumento e devolve só os dumps, então o
+servidor e esta máquina podem ser atualizados em qualquer ordem.
 
 Se qualquer dump remoto reprovar o SHA-256, a releitura ou outro requisito de
 integridade, os demais projetos e dumps ainda são processados, mas a execução
@@ -121,6 +124,14 @@ arquivos e o catálogo de forma consciente. Referências do catálogo que tentem
 sair da raiz são recusadas e marcadas como corrompidas, nunca abertas ou
 removidas.
 
+### Rollback do tipo `volume` (02/10/2026)
+
+A primeira partida desta versão migra o catálogo: o `CHECK` da coluna `tipo`
+passa a aceitar `volume`, com as mesmas linhas e os mesmos ids. A versão
+anterior lê o catálogo migrado sem diferença, então o rollback é só voltar o
+código; as linhas de volume ficam no catálogo, e ela não as mostra nem relê
+além do SHA-256. Não apague a pasta `volume\` como parte do rollback.
+
 ### Rollback da configuração
 
 O formato do catálogo e dos artefatos não mudou. Para reverter somente o código,
@@ -131,21 +142,25 @@ e um `python cli.py ensaio --projeto <slug>` no sandbox.
 
 ## O que é gravado
 
-Dois artefatos por projeto, em `<raiz-configurada>\projects\<projeto>\`:
+Os artefatos de cada projeto ficam em `<raiz-configurada>\projects\<projeto>\`, uma
+pasta por tipo:
 
 | Tipo | Ferramenta | Por quê |
 |---|---|---|
 | `banco/*.dump` | `pg_dump --format=custom` | formato comprimido que aceita `pg_restore` seletivo |
 | `codigo/*.zip` | Git + ZIP do aplicativo | arquivos rastreados e não ignorados, incluindo trabalho local permitido |
+| `volume/*.tar.gz` | `docker cp` no VPS, com o contêiner pausado | o diretório de dados de quem não tem Postgres (o SQLite do Wealthfolio); relido aqui com `gzip` e `tarfile`, sem Docker |
 
 Cada um com `.manifest.json` ao lado (SHA-256, tamanho, origem, e para código o
 `HEAD` e se havia trabalho não commitado).
 
-**Os projetos `_vps` só têm `banco/*.dump`** — sem `codigo/`, porque o
-código de produção não é um artefato deste sistema (ver seção "Agendamento" e
-[RESTAURAR.md](RESTAURAR.md)). O `.manifest.json` desses dumps registra o
-servidor de origem em vez de um contêiner local, e o carimbo de tempo é
-sempre o momento em que o servidor capturou o dado — não o do download.
+**Os projetos `_vps` só têm `banco/*.dump`**, ou `volume/*.tar.gz` no caso do
+Wealthfolio — sem `codigo/`, porque o código de produção não é um artefato
+deste sistema (ver seção "Agendamento" e [RESTAURAR.md](RESTAURAR.md)). O
+`.manifest.json` desses artefatos registra o servidor de origem em vez de um
+contêiner local, e o carimbo de tempo é sempre o momento em que o servidor
+capturou o dado — não o do download. A cópia de volume só volta com a chave
+mestra do Wealthfolio, que fica no [kit](KIT_RECUPERACAO.md), nunca aqui.
 
 ---
 
@@ -156,8 +171,8 @@ O que este projeto é, na prática. Estão em `motor.py` e `restaurar.py`.
 1. **Escrita atômica.** Tudo nasce em `temp/` e só vira nome final por
    `os.replace`. Um dump interrompido nunca vira arquivo truncado com nome bom.
 2. **Verificar antes de confiar.** Código de saída zero não prova nada: todo
-   artefato é relido (`pg_restore --list`, `testzip`) antes de entrar no
-   catálogo.
+   artefato é relido (`pg_restore --list`, `testzip`, o `.tar.gz` de volume
+   por inteiro) antes de entrar no catálogo.
 3. **Nunca apagar antes de ter o substituto.** A retenção roda depois da
    verificação do artefato novo, e nunca remove o último válido de um tipo.
 4. **Devolver o contêiner ao estado em que estava**, em `finally`, inclusive
@@ -298,11 +313,11 @@ quando o Agendador de Tarefas chama o `ssh.exe` real do Windows.
 ## Arquivos
 
 ```
-projetos.py     os 9 projetos (4 locais + 5 de origem VPS, em 2 servidores) e o sandbox autorizado
-banco.py        catálogo SQLite (3 tabelas, sem ORM, sem migrações)
+projetos.py     os 10 projetos (4 locais + 6 de origem VPS, em 2 servidores) e o sandbox autorizado
+banco.py        catálogo SQLite (3 tabelas, sem ORM; uma migração, a do tipo volume)
 motor.py        produção e verificação dos artefatos locais — o núcleo
 restaurar.py    travas, dump de segurança e pg_restore
-vps.py          Camada 2: busca, verifica e cataloga os dumps que o VPS produziu sozinho
+vps.py          Camada 2: busca, verifica e cataloga os dumps e cópias de volume que o VPS produziu sozinho
 cli.py          linha de comando
 web.py          interface Flask
 agendamento.py  orquestra a execução diária e escreve `ultima-execucao.txt`
