@@ -229,6 +229,24 @@ class ReconstrucaoTests(unittest.TestCase):
         self.assertEqual(relatorio.rejeitados, [])
         self.assertTrue((pasta / "seguro.dump").exists())
 
+    def test_pasta_que_e_link_para_fora_da_raiz_nao_e_seguida(self) -> None:
+        fora = Path(self.pasta.name, "fora")
+        fora.mkdir()
+        (fora / "a.zip").write_bytes(_zip_de_codigo())
+        (fora / "a.zip.manifest.json").write_text("{}", encoding="utf-8")
+        projeto = Path(self.raiz, "projects", LOCAL.slug)
+        projeto.mkdir(parents=True)
+        try:
+            os.symlink(fora, projeto / "codigo", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("este sistema não permite criar link simbólico sem privilégio")
+
+        relatorio = reconstruir.reconstruir(aplicar=True)
+
+        self.assertEqual(_linhas(), [])
+        self.assertEqual(len(relatorio.rejeitados), 1)
+        self.assertFalse(relatorio.limpo)
+
     def test_nao_apaga_nem_move_arquivo_nenhum(self) -> None:
         bom = _gravar(self.raiz, LOCAL.slug, "codigo", "bom.zip", _zip_de_codigo())
         ruim = _gravar(self.raiz, LOCAL.slug, "codigo", "ruim.zip", b"lixo", sha256="a" * 64)

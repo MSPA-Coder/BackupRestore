@@ -46,7 +46,7 @@ from dataclasses import dataclass, field
 
 import banco
 import motor
-from configuracao import ConfiguracaoInvalida, caminho_sob_raiz
+from configuracao import ConfiguracaoInvalida, caminho_sob_raiz, raiz_backup
 from projetos import CONTAINER_SANDBOX, por_slug
 
 TIPOS = ("banco", "codigo", "volume")
@@ -99,8 +99,24 @@ def _ler_manifesto(caminho: str, slug: str, tipo: str, nome: str) -> dict:
     return dados
 
 
-def _arquivos_da_pasta(pasta: str) -> list[os.DirEntry]:
+def _contido(caminho: str, raiz: str) -> str:
+    """O caminho já resolvido (links seguidos), ou `FalhaDeBackup` se sair de ``raiz``.
+
+    A varredura lê nomes de pasta do disco; um link simbólico dentro de
+    `projects/` poderia apontar para fora da raiz de backup. Resolver e comparar
+    antes de qualquer leitura fecha isso -- a mesma garantia de
+    `configuracao.caminho_sob_raiz`, repetida aqui no ponto de uso.
+    """
+    real = os.path.realpath(caminho)
+    limite = os.path.realpath(raiz)
+    if real != limite and not real.startswith(limite + os.sep):
+        raise motor.FalhaDeBackup(f"caminho fora da raiz de backup: {caminho}")
+    return real
+
+
+def _arquivos_da_pasta(pasta: str, raiz: str) -> list[os.DirEntry]:
     """Arquivos regulares de uma pasta, sem seguir link simbólico."""
+    pasta = _contido(pasta, raiz)
     with os.scandir(pasta) as itens:
         return sorted(
             (e for e in itens if e.is_file(follow_symlinks=False)), key=lambda e: e.name
@@ -117,7 +133,8 @@ def reconstruir(*, aplicar: bool = False, projeto_slug: str | None = None) -> Re
     """Varre `projects/<slug>/<tipo>/` e cataloga o que ainda não está no catálogo."""
     relatorio = Relatorio(aplicado=aplicar)
     try:
-        base = caminho_sob_raiz("projects")
+        raiz = raiz_backup()
+        base = _contido(caminho_sob_raiz("projects"), raiz)
     except ConfiguracaoInvalida as erro:
         raise motor.FalhaDeBackup(f"raiz de backup inválida: {erro}") from erro
     if not os.path.isdir(base):
@@ -145,9 +162,17 @@ def reconstruir(*, aplicar: bool = False, projeto_slug: str | None = None) -> Re
             continue
         for tipo in TIPOS:
             pasta = os.path.join(base, slug, tipo)
-            if not os.path.isdir(pasta) or os.path.islink(pasta):
+            if os.path.islink(pasta):
+                relatorio.rejeitados.append((f"{slug}/{tipo}", "pasta é um link simbólico; não seguido"))
                 continue
-            for entrada in _arquivos_da_pasta(pasta):
+            try:
+                pasta = _contido(pasta, base)
+            except motor.FalhaDeBackup as erro:
+                relatorio.rejeitados.append((f"{slug}/{tipo}", str(erro)))
+                continue
+            if not os.path.isdir(pasta):
+                continue
+            for entrada in _arquivos_da_pasta(pasta, base):
                 nome = entrada.name
                 if nome.endswith(_SUFIXO_MANIFESTO) or nome.endswith(".tmp"):
                     continue
