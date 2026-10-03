@@ -56,7 +56,7 @@ Os comprovantes do Controle Bancário (`media_volume`) continuam fora dos artefa
 
 ## Achados e correções propostas
 
-1. O plano citado como `C:\Dev\VSCodeProjects\_manutencao\PLANO_BACKUPRESTORE_VPS.md` não existe nesse caminho. O roteiro de recuperação deve apontar para um documento versionado existente antes do próximo ensaio.
+1. O plano `PLANO_BACKUPRESTORE_VPS.md`, citado nas anotações do mantenedor, não existe mais em lugar nenhum (nem em `_manutencao`, nem no antigo caminho do Dropbox). Nenhum documento versionado deste repositório depende dele; o roteiro de recuperação passa a ser [ROTEIRO_ENSAIO_RTO.md](ROTEIRO_ENSAIO_RTO.md), versionado aqui.
 2. A sincronização da Camada 2 deixou cópias recentes disponíveis somente no VPS. Documentar o RPO como o artefato local mais recente, não como a última execução de `backup-db.sh`; como mudança de desenho, sincronizar após cada backup remoto ou alertar quando a defasagem passar do limite aceito.
 3. Criar um roteiro específico de ensaio em VM com marcadores T0/T-final, responsável por cada passo manual e uma forma segura de disponibilizar os segredos. Esse roteiro é requisito para medir o RTO integral.
 4. Manter e testar a cópia independente de `media_volume` do Controle Bancário.
