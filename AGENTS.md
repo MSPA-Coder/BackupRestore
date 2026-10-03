@@ -14,6 +14,9 @@ Docker.
   `ambiente` e `servidor`) e os containers protegidos.
 - `motor.py` e `restaurar.py`: contratos de integridade e restauracao dos
   projetos locais.
+- `reconstruir.py`: recria o catalogo a partir dos manifestos ao lado dos
+  artefatos, relendo cada um como o backup normal (nada entra como valido sem
+  releitura); simula por padrao.
 - `vps.py`: Camada 2 — busca, verifica e cataloga dumps e copias de volume
   (`.tar.gz`, o SQLite do Wealthfolio) dos VPS por SSH (um alvo por servidor,
   gravado por `cli.py configurar-vps`) via um agente restrito no servidor
