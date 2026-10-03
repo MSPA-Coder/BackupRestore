@@ -12,8 +12,8 @@ arquivos operacionais nem os segredos provisionados.
 
 | Projeto | Arquivos externos esperados |
 |---|---|
-| `ControleBancario` | `.env.docker`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/django_secret_key`, `.secrets/patrimonio_token`, `.secrets/patrimonio_integration_token`; os quatro de qualidade `.secrets/quality_postgres_password`, `.secrets/quality_django_secret_key`, `.secrets/quality_patrimonio_token`, `.secrets/quality_patrimonio_integration_token`; `.certs/local-root-ca.crt` |
-| `ControleRendaVariavel` | `.env`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, `.secrets/database_url`, `.secrets/patrimonio_token`, `.secrets/patrimonio_integration_token`; o par do coletor `.secrets/collector_agent_read_token` e `.secrets/collector_agent_write_token`; os três de qualidade `.secrets/postgres_password_quality`, `.secrets/postgres_app_password_quality` e `.secrets/patrimonio_integration_token_quality`; `.certs/local-root-ca.crt`; se o agente RTD estiver instalado, `.docker-local/remote-collector.env` e `.docker-local/rtd-control-token` |
+| `ControleBancario` | `.env.docker`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/django_secret_key`, `.secrets/patrimonio_integration_token`; os três de qualidade `.secrets/quality_postgres_password`, `.secrets/quality_django_secret_key`, `.secrets/quality_patrimonio_integration_token`; `.certs/local-root-ca.crt` |
+| `ControleRendaVariavel` | `.env`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, `.secrets/database_url`, `.secrets/patrimonio_integration_token`; o par do coletor `.secrets/collector_agent_read_token` e `.secrets/collector_agent_write_token`; os três de qualidade `.secrets/postgres_password_quality`, `.secrets/postgres_app_password_quality` e `.secrets/patrimonio_integration_token_quality`; `.certs/local-root-ca.crt`; se o agente RTD estiver instalado, `.docker-local/remote-collector.env` e `.docker-local/rtd-control-token` |
 | `MegaSena` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `ConfortoTermico` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; os três tokens internos `.secrets/internal_token.txt`, `.secrets/internal_control_token.txt`, `.secrets/internal_read_token.txt`; `.certs/local-root-ca.crt` |
 | `MpPortal` | `.env`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
@@ -62,8 +62,9 @@ momento possivel.
 
 **Os segredos que ligam sistemas precisam ser restaurados aos pares.**
 
-- O `patrimonio_token` precisa existir: o Compose recusa subir com um segredo
-  declarado e ausente.
+- O `patrimonio_token` antigo foi retirado dos dois sistemas (CRV em
+  03/10/2026; CB no PR que migra a projeção para o token v4). Um arquivo com
+  esse nome que sobrar num backup antigo não é mais exigido por ninguém.
 - Os `patrimonio_integration_token` do ControleBancario e do ControleRendaVariavel
   (rotas v4) são os que o add-on do Wealthfolio guarda no cofre dele. Rotacionar
   um deles exige colar o valor novo na tela do add-on. O cofre fica dentro do
@@ -86,8 +87,8 @@ num VPS dedicado.
 
 | Projeto (no VPS) | Fora do Git, indispensável |
 |---|---|
-| `controle-bancario` | `.env.vps`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/django_secret_key`, `.secrets/patrimonio_token`, `.secrets/patrimonio_integration_token` (ou na pasta de `COMPOSE_SECRETS_DIRECTORY`, se o `.env.vps` a definir); `.certs/local-root-ca.crt` |
-| `controle-renda-variavel` | `.env.vps` (inclui `PATRIMONIO_TITULAR`); `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, o par do coletor `.secrets/collector_agent_read_token` e `.secrets/collector_agent_write_token`, `.secrets/patrimonio_token`, `.secrets/patrimonio_integration_token`; `.certs/local-root-ca.crt` |
+| `controle-bancario` | `.env.vps`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/django_secret_key`, `.secrets/patrimonio_integration_token` (ou na pasta de `COMPOSE_SECRETS_DIRECTORY`, se o `.env.vps` a definir); `.certs/local-root-ca.crt` |
+| `controle-renda-variavel` | `.env.vps` (inclui `PATRIMONIO_TITULAR`); `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, o par do coletor `.secrets/collector_agent_read_token` e `.secrets/collector_agent_write_token`, `.secrets/patrimonio_integration_token`; `.certs/local-root-ca.crt` |
 | `wealthfolio-teste` | `.env` (este usa `.env`, não `.env.vps`: `WF_SECRET_KEY_HOST_PATH`, `WF_AUTH_PASSWORD_HASH`, `WF_ADDON_NETWORK_PRIVATE_TARGETS`); o arquivo da **chave mestra**, apontado por `WF_SECRET_KEY_HOST_PATH` e guardado fora do checkout |
 | `mega-sena` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `conforto-termico` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
@@ -95,6 +96,21 @@ num VPS dedicado.
 
 Não é o mesmo inventário dos locais acima. Confirme os nomes contra a
 configuração da versão restaurada antes de cada ensaio.
+
+### Chaves de deploy do GitHub (VPS compartilhado)
+
+Uma máquina nova **não consegue clonar** os repositórios sem elas, e elas não
+estavam neste inventário até o ensaio de 03/10/2026. No VPS compartilhado,
+`~/.ssh/` guarda um par por repositório (`deploy_bancario`, `deploy_conforto`,
+`deploy_megasena`, `deploy_renda`, `deploy_manutencao`, `deploy_wealthfolio`,
+cada um com o `.pub`) e o `~/.ssh/config` com um `Host github-<repo>` para cada
+um (`github-bancario`, `github-conforto`, `github-megasena`, `github-renda`,
+`github-manutencao`, `github-wealthfolio`). Preserve o `config` e as chaves
+privadas no cofre; a chave pública já está cadastrada em cada repositório, então
+nada precisa ser recadastrado se a mesma chave voltar. Se não voltar, é preciso
+gerar um par novo e cadastrá-lo como *deploy key* de cada repositório.
+Conferido apenas pelos **nomes** dos arquivos e das entradas, sem ler chave
+nenhuma.
 
 **Esta tabela do VPS nao foi conferida contra o disco de um servidor** -- nem
 na revisao de 22/09/2026 nem depois. Em 02/10/2026 as linhas do
@@ -112,7 +128,7 @@ documento, manifestos ou registros de ensaio.
 sem Swarm monta cada segredo com as permissões do host, e cada contêiner lê
 com o seu próprio usuário:
 
-- **`controle-bancario`:** o `patrimonio_token` leva o mesmo dono e modo do
+- **`controle-bancario`:** o `patrimonio_integration_token` leva o mesmo dono e modo do
   `django_secret_key` (`chown/chmod --reference`, com `sudo`). Com
   `ubuntu:600`, o deploy passa e a rota responde 503;
 - **`controle-renda-variavel`:** os arquivos ficam com modo

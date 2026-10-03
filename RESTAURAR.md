@@ -194,6 +194,13 @@ linha com o projeto original:
 python cli.py ensaio --projeto conforto_termico
 ```
 
+Isso ensaia **só os bancos**. O ensaio de reconstruir o servidor inteiro, com
+provisionamento, segredos, clone, deploy e contrato entre os sistemas, sem
+custo e numa distro WSL descartável, está em
+[docs/ROTEIRO_ENSAIO_RTO.md](docs/ROTEIRO_ENSAIO_RTO.md); o resultado do
+primeiro ensaio (parcial) está em
+[docs/ENSAIO_RTO_2026-10-03.md](docs/ENSAIO_RTO_2026-10-03.md).
+
 **Para um projeto `_vps`, o mesmo comando restaura de verdade no sandbox, mas
 não compara com a origem automaticamente** — a produção está noutra máquina, e
 o agente do VPS só sabe quatro verbos (`listar`/`enviar`/`apagar`/`estado`),
@@ -231,6 +238,14 @@ origem do dump.
   servidor o produziu (ver o `.manifest.json`), não um estado contínuo — não
   há arquivamento de WAL para voltar a um instante específico entre dois
   dumps.
+- **Quanto se perde (RPO) é a idade do artefato mais recente no catálogo
+  LOCAL, não a do último `backup-db.sh`.** O servidor produz o dump às 03:00
+  (São Paulo) e a tarefa `BackupRestoreVPS` o busca às 03:30, mas se o PC
+  estiver desligado ou a busca falhar, as cópias mais novas ficam só no VPS —
+  exatamente o que se perderia junto com ele. No ensaio de 03/10/2026 o
+  catálogo local estava cerca de 11 horas atrás (e cerca de 4 horas atrás do
+  que o próprio VPS já tinha). Para saber o RPO de hoje, compare
+  `python cli.py listar` com o `estado` do agente do VPS.
 - **Monitoramento.** Nada aqui avisa em tempo real se o VPS parar de produzir
   backup; `python cli.py sincronizar-vps --todos` (ou a tarefa agendada
   `BackupRestoreVPS`) é como se descobre, não uma notificação ativa.
