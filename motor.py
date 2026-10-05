@@ -245,7 +245,7 @@ def _estado_git(projeto: Projeto) -> dict:
     """O bundle carrega o que está commitado. Trabalho não commitado fica de
     fora — registrar isso no manifesto evita a descoberta tardia."""
     processo = _rodar(["git", "-C", projeto.caminho, "status", "--porcelain"], tempo_limite=120)
-    linhas = [l for l in processo.stdout.decode("utf-8", "replace").splitlines() if l.strip()]
+    linhas = [linha for linha in processo.stdout.decode("utf-8", "replace").splitlines() if linha.strip()]
     cabeca = _rodar(["git", "-C", projeto.caminho, "rev-parse", "HEAD"], tempo_limite=60)
     return {
         "head": cabeca.stdout.decode().strip() if cabeca.returncode == 0 else None,

@@ -644,3 +644,122 @@ class TestArgumentoParaOShellRemoto(unittest.TestCase):
         # Reabrir a string com uma aspa própria é o truque clássico; o
         # `shlex.quote` fecha, escapa a aspa e reabre.
         self.assertNotIn("'; rm", escapado.replace("'\"'\"'", ""))
+
+
+class RetencaoNaSincronizacaoTests(unittest.TestCase):
+    """O `retencao` de `projetos.py` precisa valer para projeto de VPS também.
+
+    O defeito que motivou estes testes: `aplicar_retencao` só era chamada no
+    backup por contêiner, que ambiente='vps' nunca executa. O limite aparecia
+    no painel e não tinha efeito nenhum — em 04/10/2026 o acervo local tinha
+    86 dumps de um projeto cujo limite é 14, e cada ciclo acrescentava mais.
+    """
+
+    @contextmanager
+    def _isolado(self):
+        """`_ambiente_raiz` isola a raiz de backup e a configuração, mas **não
+        o catálogo**. Sem o patch de `CAMINHO_CATALOGO` abaixo estes testes
+        gravam no `catalogo.sqlite3` real deste PC, e aí a retenção decide
+        sobre o acervo de verdade — com os caminhos resolvidos sob a raiz
+        temporária, ela não acha os arquivos e marca 'removido' artefato que
+        continua no disco. Foi o que aconteceu uma vez; daí o patch explícito."""
+        with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
+            with patch.object(
+                banco, "CAMINHO_CATALOGO", str(Path(diretorio, "catalogo.sqlite3"))
+            ):
+                banco.criar_tabelas()
+                yield diretorio
+
+    def _cenario(self, diretorio: str, quantidade: int) -> list[str]:
+        """Semeia `quantidade` dumps já buscados: em disco e no catálogo, do
+        mais antigo para o mais novo, com o carimbo do servidor."""
+        pasta = Path(diretorio, "backups", "projects", PROJETO_VPS.slug, "banco")
+        pasta.mkdir(parents=True)
+        nomes = []
+        for dia in range(1, quantidade + 1):
+            nome = f"{PROJETO_VPS.slug_servidor}_banco_202609{dia:02d}_000000.dump"
+            (pasta / nome).write_bytes(b"dump ja buscado")
+            banco.registrar_artefato(
+                projeto=PROJETO_VPS.slug, tipo="banco",
+                caminho_relativo=f"projects/{PROJETO_VPS.slug}/banco/{nome}",
+                bytes_=15, sha256="a" * 64, duracao_ms=1, execucao_id=None,
+                criado_em=f"2026-09-{dia:02d}T00:00:00",
+            )
+            nomes.append(nome)
+        return nomes
+
+    def _sincronizar(self, nome_remoto: str, *, sem_hash: bool = False):
+        """Um ciclo em que o único dump do servidor já existe aqui: nada é
+        buscado, então o que sobrar do acervo é efeito só da retenção."""
+        sha = "sem-hash" if sem_hash else "a" * 64
+        linha = f"{PROJETO_VPS.slug_servidor}/{nome_remoto} 15 {sha}\n"
+        listar_proc = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=linha.encode(), stderr=b""
+        )
+        apagar_proc = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=b"mantido: e o mais recente\n", stderr=b""
+        )
+
+        def _ssh_fake(alvo, comando, **kwargs):
+            if comando.split()[0] == "listar":
+                return listar_proc
+            if comando.startswith("apagar "):
+                return apagar_proc
+            raise AssertionError(f"não deveria buscar: {comando!r}")
+
+        with (
+            patch.object(vps, "_ssh", side_effect=_ssh_fake),
+            patch.object(vps, "_alvo_configurado", return_value=ALVO),
+        ):
+            return vps.sincronizar_projeto(PROJETO_VPS)
+
+    def _validos(self) -> list[str]:
+        return [
+            os.path.basename(linha["caminho_relativo"])
+            for linha in banco.artefatos_validos(PROJETO_VPS.slug, "banco")
+        ]
+
+    def test_excedente_sai_do_disco_e_do_catalogo_do_mais_antigo_para_o_novo(self) -> None:
+        limite = PROJETO_VPS.retencao
+        with self._isolado() as diretorio:
+            nomes = self._cenario(diretorio, limite + 3)
+
+            self._sincronizar(nomes[-1])
+
+            restantes = self._validos()
+            pasta = Path(diretorio, "backups", "projects", PROJETO_VPS.slug, "banco")
+            em_disco = sorted(p.name for p in pasta.iterdir())
+
+        self.assertEqual(len(restantes), limite, "a retenção não foi aplicada")
+        self.assertEqual(sorted(restantes), sorted(nomes[3:]), "saíram os errados")
+        self.assertEqual(em_disco, sorted(nomes[3:]), "o catálogo e o disco divergiram")
+
+    def test_acervo_dentro_do_limite_fica_intacto(self) -> None:
+        limite = PROJETO_VPS.retencao
+        with self._isolado() as diretorio:
+            nomes = self._cenario(diretorio, limite)
+
+            self._sincronizar(nomes[-1])
+
+            restantes = self._validos()
+
+        self.assertEqual(sorted(restantes), sorted(nomes))
+
+    def test_dump_reprovado_suspende_a_limpeza(self) -> None:
+        """Regra 3 atravessando a rede: sem substituto confiável, não se apaga.
+
+        O servidor não informou SHA-256 do dump novo, então ele não foi
+        buscado. Apagar o excedente aqui seria reduzir o acervo numa rodada em
+        que a captura do dado falhou.
+        """
+        limite = PROJETO_VPS.retencao
+        with self._isolado() as diretorio:
+            self._cenario(diretorio, limite + 3)
+            novo = f"{PROJETO_VPS.slug_servidor}_banco_20260930_000000.dump"
+
+            resultado = self._sincronizar(novo, sem_hash=True)
+
+            restantes = self._validos()
+
+        self.assertEqual(resultado.reprovados, 1)
+        self.assertEqual(len(restantes), limite + 3, "apagou numa rodada que falhou")

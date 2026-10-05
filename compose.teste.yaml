@@ -19,6 +19,9 @@ services:
   sandbox:
     image: postgres:17-alpine
     container_name: backuprestore-sandbox
+    # A releitura dos dumps do VPS depende dele: se o Docker reinicia e o
+    # sandbox fica parado, a sincronização reprova dumps sadios (05/10/2026).
+    restart: unless-stopped
     user: postgres
     read_only: true
     cap_drop:

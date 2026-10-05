@@ -49,6 +49,12 @@ seis projetos `_vps` não — a produção acontece sozinha em cada servidor
 busca, verifica e cataloga o que já existe lá, pelo agente restrito
 (`_manutencao/vps/backup-agent.sh`).
 
+Ao fim do ciclo de cada projeto, a sincronização aplica a retenção local dele
+— o mesmo limite de `projetos.py` que o backup dos projetos locais respeita. É
+a regra 3 deste lado: se algum dump da rodada reprovou, a limpeza é suspensa,
+porque reduzir o acervo numa rodada em que a captura falhou seria apagar sem
+ter o substituto.
+
 São dois servidores: o principal, com os quatro aplicativos e o Wealthfolio, e
 o do portal (`mp_portal_vps`). O campo `servidor` de cada projeto em
 `projetos.py` diz de qual deles o dump vem. Configure cada alvo uma vez:

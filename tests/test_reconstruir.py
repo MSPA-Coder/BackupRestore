@@ -24,7 +24,7 @@ import cli
 import configuracao
 import motor
 import reconstruir
-from projetos import PROJETOS, por_slug
+from projetos import PROJETOS
 from tests.test_volume import COPIA_BOA
 
 LOCAL = next(p for p in PROJETOS if p.ambiente == "local")
