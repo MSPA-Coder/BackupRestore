@@ -354,6 +354,14 @@ class BuscarCopiaDeVolumeTests(unittest.TestCase):
 
 
 class SincronizarProjetoTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Estes testes simulam o catálogo função a função. A retenção real leria
+        # (e poderia alterar) o `catalogo.sqlite3` deste PC, ou falharia onde
+        # ele não existe (CI); ela é coberta em RetencaoNaSincronizacaoTests.
+        parada = patch.object(motor, "aplicar_retencao", return_value=0)
+        parada.start()
+        self.addCleanup(parada.stop)
+
     def test_recusa_projeto_local_e_fecha_execucao(self) -> None:
         with (
             patch.object(banco, "abrir_execucao", return_value=999) as abrir,
