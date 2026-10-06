@@ -352,6 +352,26 @@ def sincronizar_projeto(projeto: Projeto, execucao_id: int | None = None) -> Res
                 banco.registrar_evento("sincronizacao.aviso", mensagem, projeto=projeto.slug,
                                        execucao_id=execucao_id, severidade="aviso")
 
+        # Regra 3, do lado de cá: a retenção local só roda depois do ciclo
+        # inteiro, quando todo dump que entrou no catálogo já passou pelo
+        # SHA-256 e pela releitura. Um reprovado suspende a limpeza — sem
+        # substituto confiável não se apaga nada.
+        #
+        # Sem esta chamada o `retencao` de `projetos.py` não tinha efeito
+        # nenhum para projeto de VPS: o acervo local crescia sem limite (86
+        # dumps contra 14 em 04/10/2026), porque a única outra chamada de
+        # `aplicar_retencao` está no backup por contêiner, que ambiente='vps'
+        # nunca executa.
+        if not resultado.reprovados:
+            banco.marcar_fase(execucao_id, "Aplicando retenção", 95)
+            for tipo in projeto.tipos:
+                removidos = motor.aplicar_retencao(projeto, tipo)
+                if removidos:
+                    banco.registrar_evento(
+                        "retencao", f"{removidos} artefato(s) de {tipo} removido(s)",
+                        projeto=projeto.slug, execucao_id=execucao_id,
+                    )
+
         resumo = (
             f"{resultado.buscados} buscado(s), {resultado.ja_existentes} já existia(m), "
             f"{resultado.reprovados} reprovado(s), {resultado.apagados} apagado(s) do "
