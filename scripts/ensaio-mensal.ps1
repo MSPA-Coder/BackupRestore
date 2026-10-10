@@ -1,12 +1,13 @@
 <#
 .SYNOPSIS
-  Confere o catálogo e ensaia a restauração local e do último dump do VPS.
+  Confere o catálogo e ensaia a restauração do último dump de cada projeto.
 
 .DESCRIPTION
-  É o ensaio operacional mensal do projeto ControleRendaVariavel. A
-  restauração continua presa ao sandbox autorizado pelo cli.py; este script
-  apenas encadeia a interface oficial e grava um resumo legível para o
-  Agendador de Tarefas.
+  É o ensaio operacional mensal de todos os projetos com banco, locais e do
+  VPS (`cli.py ensaio --todos`, que lê a lista de projetos.py). Até
+  10/10/2026 ensaiava só o ControleRendaVariavel. A restauração continua
+  presa ao sandbox autorizado pelo cli.py; este script apenas encadeia a
+  interface oficial e grava um resumo legível para o Agendador de Tarefas.
 #>
 [CmdletBinding()]
 param()
@@ -46,8 +47,7 @@ try {
     $linhas.Add("BackupRestore - ensaio mensal")
     $linhas.Add("Início: $((Get-Date).ToString('s'))")
     Invoke-Operacao @("verificar")
-    Invoke-Operacao @("ensaio", "--projeto", "controle_renda_variavel")
-    Invoke-Operacao @("ensaio", "--projeto", "controle_renda_variavel_vps")
+    Invoke-Operacao @("ensaio", "--todos")
     $linhas.Add("Fim: $((Get-Date).ToString('s'))")
     $linhas.Add($(if ($falhou) { "RESULTADO: FALHA" } else { "RESULTADO: OK" }))
     [System.IO.File]::WriteAllLines($temporario, [string[]]$linhas, [System.Text.UTF8Encoding]::new($false))

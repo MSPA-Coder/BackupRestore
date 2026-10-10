@@ -205,7 +205,19 @@ def _alvo_configurado(servidor: str) -> dict[str, str]:
     return alvo
 
 
-def listar_remoto(alvo: dict[str, str]) -> list[DumpRemoto]:
+_PASTA_DA_LINHA = re.compile(r"^(?P<slug>[a-z_]+)/")
+
+
+def listar_remoto(alvo: dict[str, str], slug_servidor: str | None = None) -> list[DumpRemoto]:
+    """A listagem do agente, linha a linha, recusando o que foge do formato.
+
+    Com `slug_servidor`, só as linhas daquela pasta do servidor interessam, e
+    uma linha de OUTRA pasta, mesmo fora do formato, não derruba a
+    sincronização deste projeto. Em 10/10/2026 um dump manual em
+    `~/backups/manual/` derrubou os seis projetos do VPS1 de uma vez, porque
+    cada um lia a listagem inteira e recusava a linha alheia. A linha sem pasta
+    reconhecível continua derrubando todos: aí é o agente que não fala mais o
+    contrato, e nada do que ele disser merece confiança."""
     processo = _ssh(alvo, COMANDO_LISTAR)
     if processo.returncode != 0:
         raise FalhaDeSincronizacao(f"listar falhou: {motor._erro(processo)}")
@@ -214,6 +226,9 @@ def listar_remoto(alvo: dict[str, str]) -> list[DumpRemoto]:
     for linha in processo.stdout.decode("utf-8", "replace").splitlines():
         linha = linha.strip()
         if not linha:
+            continue
+        pasta = _PASTA_DA_LINHA.match(linha)
+        if slug_servidor is not None and pasta and pasta["slug"] != slug_servidor:
             continue
         m = _PADRAO_LISTAGEM.match(linha)
         if not m or _EXTENSAO_DO_TIPO[m["tipo"]] != m["extensao"]:
@@ -313,7 +328,7 @@ def sincronizar_projeto(projeto: Projeto, execucao_id: int | None = None) -> Res
     try:
         alvo = _alvo_configurado(projeto.servidor)
         banco.marcar_fase(execucao_id, "Consultando o servidor", 5)
-        remotos = [d for d in listar_remoto(alvo) if d.slug_servidor == projeto.slug_servidor]
+        remotos = listar_remoto(alvo, projeto.slug_servidor)
 
         total = len(remotos) or 1
         for indice, dump in enumerate(remotos):
