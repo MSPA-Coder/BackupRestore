@@ -5,6 +5,7 @@
     python cli.py verificar
     python cli.py reconstruir-catalogo [--aplicar]
     python cli.py ensaio --projeto conforto_termico
+    python cli.py ensaio --todos
 
 A interface usa exatamente as mesmas funções; nada de execução vive nela.
 """
@@ -14,6 +15,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 
 import banco
 import motor
@@ -24,6 +26,7 @@ from projetos import (
     AMBIENTE_VPS,
     CONTAINER_SANDBOX,
     PROJETOS,
+    Projeto,
     por_slug,
 )
 from configuracao import ConfiguracaoInvalida, configurar_raiz_backup, configurar_vps, raiz_backup
@@ -232,7 +235,40 @@ def comando_ensaio(args: argparse.Namespace) -> int:
 
     Nunca toca no projeto original — o destino é sempre o contêiner descartável,
     e `restaurar.py` recusaria qualquer outro."""
-    projeto = por_slug(args.projeto)
+    if getattr(args, "todos", False):
+        return _ensaiar_todos()
+    return _ensaiar(por_slug(args.projeto))
+
+
+def _ensaiar_todos() -> int:
+    """Todos os projetos que têm banco, um depois do outro, com o tempo de cada um.
+
+    Até 10/10/2026 o ensaio mensal (`scripts/ensaio-mensal.ps1`) chamava só o
+    ControleRendaVariavel, local e VPS: os outros bancos nunca tinham passado
+    por uma restauração automática. A lista sai de `projetos.py`, a mesma do
+    resto do sistema, para projeto novo entrar sem ninguém lembrar de
+    acrescentá-lo. Um projeto que falha, inclusive com erro inesperado, não
+    impede os seguintes: o ensaio existe para dar a resposta de cada um."""
+    reprovados: list[str] = []
+    for projeto in PROJETOS:
+        if "banco" not in projeto.tipos:
+            continue
+        inicio = time.monotonic()
+        try:
+            codigo = _ensaiar(projeto)
+        except Exception as erro:
+            print(f"   ERRO: {erro}", file=sys.stderr)
+            codigo = 1
+        print(f"   tempo: {time.monotonic() - inicio:.1f} s\n")
+        if codigo != 0:
+            reprovados.append(projeto.slug)
+    if reprovados:
+        print(f"Ensaio reprovado em: {', '.join(reprovados)}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _ensaiar(projeto: Projeto) -> int:
     dumps = banco.artefatos_validos(projeto.slug, "banco")
     if not dumps:
         print(f"Nenhum dump válido de {projeto.nome} no catálogo.", file=sys.stderr)
@@ -375,7 +411,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(funcao=comando_restaurar)
 
     p = sub.add_parser("ensaio", help="restaura no sandbox e compara com a origem")
-    p.add_argument("--projeto", required=True)
+    grupo = p.add_mutually_exclusive_group(required=True)
+    grupo.add_argument("--todos", action="store_true", help="todos os projetos com banco")
+    grupo.add_argument("--projeto")
     p.set_defaults(funcao=comando_ensaio)
 
     args = analisador.parse_args(argv)

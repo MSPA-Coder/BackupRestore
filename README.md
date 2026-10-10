@@ -39,7 +39,7 @@ python cli.py listar                  # catálogo
 python cli.py verificar               # relê os arquivos e confere SHA-256
 python cli.py reconstruir-catalogo    # recria o catálogo dos manifestos (simula; --aplicar grava)
 python cli.py ensaio --projeto mega_sena   # restaura no sandbox e compara com a origem
-scripts\\ensaio-mensal.ps1                 # verifica e ensaia local + VPS
+scripts\\ensaio-mensal.ps1                 # verifica e ensaia todos os bancos, local + VPS
 python web.py                         # interface em http://127.0.0.1:5401
 ```
 
@@ -285,8 +285,12 @@ Depois da primeira execução, confira o resultado com `python cli.py listar`.
 
 ### Ensaio mensal
 
-O script `scripts\\ensaio-mensal.ps1` encadeia `verificar` e os ensaios de
-`controle_renda_variavel` e `controle_renda_variavel_vps`. Ele grava
+O script `scripts\\ensaio-mensal.ps1` encadeia `verificar` e `ensaio --todos`,
+que restaura o último dump válido de cada projeto com banco em `projetos.py`,
+local e VPS, e mostra o tempo de cada um (em 10/10/2026, nove projetos em cerca
+de 32 s). Um projeto que falha não impede os seguintes. A cópia de volume do
+Wealthfolio não entra: abrir o SQLite exige a chave mestra, e esse ensaio é o
+de RTO (`docs/ROTEIRO_ENSAIO_RTO.md`). O script grava
 `ensaio-mensal-ultimo.txt` por troca atômica, retorna código diferente de zero
 quando qualquer restauração falha e nunca restaura em contêiner operacional — o
 `cli.py` mantém a allowlist do `backuprestore-sandbox`.

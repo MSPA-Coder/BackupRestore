@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import io
 import json
 import os
 import sys
@@ -468,6 +469,36 @@ class EnsaioVpsTests(unittest.TestCase):
             codigo = cli.comando_ensaio(argumentos)
 
         self.assertEqual(codigo, 0, "restaurou: o ensaio não falhou")
+
+    def test_todos_ensaia_cada_banco_e_um_que_falha_nao_para_os_outros(self) -> None:
+        # Até 10/10/2026 o ensaio mensal só chamava o CRV. Com `--todos`, a
+        # lista vem de PROJETOS; o volume do Wealthfolio não tem banco e fica
+        # de fora; o primeiro estoura com erro inesperado, e o segundo ainda
+        # assim é restaurado.
+        wealthfolio = por_slug("wealthfolio_teste_vps")
+        artefato = {"id": 1, "caminho_relativo": "projects/x/banco/x.dump", "projeto": "x"}
+        argumentos = type("Args", (), {"todos": True, "projeto": None})()
+
+        with (
+            patch.object(cli, "PROJETOS", [PROJETO_LOCAL, wealthfolio, PROJETO_VPS]),
+            patch.object(cli.banco, "artefatos_validos", return_value=[artefato]) as validos,
+            patch.object(cli.motor, "estado_container", return_value=(True, True)),
+            patch.object(
+                cli.restauracao, "restaurar", side_effect=[RuntimeError("pg_restore travou"), {}]
+            ),
+            patch.object(cli.restauracao, "resumo_banco", return_value={"tabela": 5}),
+            patch("sys.stdout", new_callable=io.StringIO) as saida,
+            patch("sys.stderr", new_callable=io.StringIO),
+        ):
+            codigo = cli.comando_ensaio(argumentos)
+
+        self.assertEqual(codigo, 1, "um projeto reprovado reprova o ensaio")
+        self.assertEqual(
+            [chamada.args[0] for chamada in validos.call_args_list],
+            [PROJETO_LOCAL.slug, PROJETO_VPS.slug],
+        )
+        self.assertIn("RESTAURADO", saida.getvalue(), "o segundo projeto foi restaurado")
+        self.assertEqual(saida.getvalue().count("tempo:"), 2)
 
     def test_origem_indisponivel_e_falha_de_dominio_nao_erro_solto(self) -> None:
         with patch.object(motor, "estado_container", return_value=(False, False)):

@@ -503,6 +503,47 @@ class SincronizarProjetoTests(unittest.TestCase):
         self.assertEqual(len(resultado.avisos), 1)
         fechar.assert_called_once_with(1, "sucesso")
 
+    def _sincronizar_com_listagem(self, listagem: str):
+        """Roda `sincronizar_projeto` contra um agente que só responde `listar`."""
+        listar_proc = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=listagem.encode(), stderr=b""
+        )
+
+        def _ssh_fake(alvo, comando, **kwargs):
+            if comando.split()[0] == "listar":
+                return listar_proc
+            raise AssertionError(f"nada deste projeto para buscar ou apagar: {comando!r}")
+
+        with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
+            with (
+                patch.object(vps, "_ssh", side_effect=_ssh_fake),
+                patch.object(vps, "_alvo_configurado", return_value=ALVO),
+                patch.object(banco, "abrir_execucao", return_value=1),
+                patch.object(banco, "marcar_fase"),
+                patch.object(banco, "fechar_execucao") as fechar,
+                patch.object(banco, "registrar_evento"),
+            ):
+                resultado = vps.sincronizar_projeto(PROJETO_VPS)
+        return resultado, fechar
+
+    def test_linha_estranha_de_outra_pasta_nao_derruba_este_projeto(self) -> None:
+        """10/10/2026: a linha abaixo, de um dump manual, derrubou a
+        sincronização dos seis projetos do VPS1 de uma vez."""
+        resultado, fechar = self._sincronizar_com_listagem(
+            "manual/crv_antes_excluir_simulada_20261009_165006.dump 1302390 sem-hash\n"
+        )
+        self.assertEqual(resultado.reprovados, 0)
+        fechar.assert_called_once_with(1, "sucesso")
+
+    def test_linha_estranha_na_pasta_do_proprio_projeto_continua_recusada(self) -> None:
+        slug = PROJETO_VPS.slug_servidor
+        with self.assertRaises(vps.FalhaDeSincronizacao):
+            self._sincronizar_com_listagem(f"{slug}/{slug}_antes_de_mexer.dump 10 sem-hash\n")
+
+    def test_linha_sem_pasta_continua_derrubando_todos(self) -> None:
+        with self.assertRaises(vps.FalhaDeSincronizacao):
+            self._sincronizar_com_listagem("isso nao e uma linha valida\n")
+
     def test_sem_hash_e_reprovado_sem_tentar_buscar_ou_apagar(self) -> None:
         nome = f"{PROJETO_VPS.slug_servidor}_banco_20260819_000000.dump"
         linha = f"{PROJETO_VPS.slug_servidor}/{nome} 10 sem-hash"
