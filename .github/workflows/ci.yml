@@ -49,6 +49,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/trivy-cache"
           chmod 777 "$RUNNER_TEMP/trivy-cache"
           docker save mspa-postgres:17-alpine -o "$RUNNER_TEMP/imagem.tar"
+          chmod 644 "$RUNNER_TEMP/imagem.tar"
           docker compose -f .github/docker-compose.yml run --rm trivy \
             --cache-dir /tmp/trivy-cache \
             image --input /varredura/imagem.tar \
@@ -61,6 +62,7 @@ jobs:
         run: |
           set -euo pipefail
           docker save backuprestore-quality:local -o "$RUNNER_TEMP/quality.tar"
+            chmod 644 "$RUNNER_TEMP/quality.tar"
           docker compose -f .github/docker-compose.yml run --rm trivy \
             --cache-dir /tmp/trivy-cache \
             image --input /varredura/quality.tar \
