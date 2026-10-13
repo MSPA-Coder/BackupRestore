@@ -7,7 +7,7 @@ verifica e cataloga os dumps que os VPS de produção já produzem sozinhos
 Wealthfolio, que não tem Postgres — nunca dispara `pg_dump` remoto nem toca em
 contêiner de produção.
 
-Roda no host (Python >=3.13; Python 3.14 atualmente testado, com Flask). Não é
+Roda no host com Python 3.15 e Flask no `.venv`. Não é
 containerizado de propósito: é a ferramenta que gerencia os contêineres dos
 outros projetos, e colocá-la dentro de um exigiria montar o socket do Docker.
 
@@ -19,7 +19,8 @@ por verificação dos artefatos e ensaio de restauração.
 compatível está em `requirements.txt`; prepare o runtime explicitamente com:
 
 ```powershell
-python -m pip install -r requirements.txt
+uv venv --python 3.15 .venv
+uv pip install --python .venv\Scripts\python.exe -r requirements.txt
 ```
 
 ---
@@ -32,15 +33,15 @@ para parar.
 
 Pela linha de comando:
 
-```bash
-python cli.py backup --todos          # o que o Agendador chama (só os projetos locais)
-python cli.py sincronizar-vps --todos # Camada 2: busca, verifica e cataloga os dumps dos VPS
-python cli.py listar                  # catálogo
-python cli.py verificar               # relê os arquivos e confere SHA-256
-python cli.py reconstruir-catalogo    # recria o catálogo dos manifestos (simula; --aplicar grava)
-python cli.py ensaio --projeto mega_sena   # restaura no sandbox e compara com a origem
+```powershell
+& .\.venv\Scripts\python.exe cli.py backup --todos          # o que o Agendador chama (só os projetos locais)
+& .\.venv\Scripts\python.exe cli.py sincronizar-vps --todos # Camada 2: busca, verifica e cataloga os dumps dos VPS
+& .\.venv\Scripts\python.exe cli.py listar                  # catálogo
+& .\.venv\Scripts\python.exe cli.py verificar               # relê os arquivos e confere SHA-256
+& .\.venv\Scripts\python.exe cli.py reconstruir-catalogo    # recria o catálogo dos manifestos (simula; --aplicar grava)
+& .\.venv\Scripts\python.exe cli.py ensaio --projeto mega_sena   # restaura no sandbox e compara com a origem
 scripts\\ensaio-mensal.ps1                 # verifica e ensaia todos os bancos, local + VPS
-python web.py                         # interface em http://127.0.0.1:5401
+& .\.venv\Scripts\python.exe web.py # interface em http://127.0.0.1:5401
 ```
 
 Os quatro projetos locais produzem o próprio backup (contêiner Docker). Os
@@ -60,8 +61,8 @@ o do portal (`mp_portal_vps`). O campo `servidor` de cada projeto em
 `projetos.py` diz de qual deles o dump vem. Configure cada alvo uma vez:
 
 ```powershell
-python cli.py configurar-vps <host> --usuario ubuntu --chave 'C:\caminho\da\chave-dedicada'
-python cli.py configurar-vps <host-do-portal> --servidor portal --chave 'C:\caminho\da\chave-dedicada'
+& .\.venv\Scripts\python.exe cli.py configurar-vps <host> --usuario ubuntu --chave 'C:\caminho\da\chave-dedicada'
+& .\.venv\Scripts\python.exe cli.py configurar-vps <host-do-portal> --servidor portal --chave 'C:\caminho\da\chave-dedicada'
 ```
 
 A mesma chave dedicada pode servir aos dois servidores: em cada um ela entra no
@@ -79,11 +80,10 @@ daquele projeto fica registrada como falha e `sincronizar-vps` termina com
 código diferente de zero. As contagens exibidas indicam o resultado parcial.
 
 > **Atenção ao interpretador.** `iniciar.bat` usa primeiro o executável indicado
-> por `BACKUPRESTORE_PYTHON`, depois `%LOCALAPPDATA%\Python\bin\python.exe` se
-> existir e, por fim, `python` do `PATH`. O runtime selecionado precisa ser
-> Python >=3.13 e importar Flask; o batch valida isso antes de abrir o navegador.
-> Para tarefas agendadas, use diretamente o caminho absoluto de um runtime
-> validado, sem depender de um diretório interno versionado.
+> por `BACKUPRESTORE_PYTHON`; sem essa variável, usa `.venv\Scripts\python.exe`.
+> Essa venv deve ser criada com Python 3.15 e importar Flask. Tarefas agendadas
+> usam o mesmo executável do projeto, sem depender de uma instalação Python
+> removível.
 
 Para restaurar de verdade, veja [RESTAURAR.md](RESTAURAR.md). A lista dos
 arquivos confidenciais que precisam de protecao independente esta em
@@ -98,7 +98,7 @@ Sem configuração, o destino portátil é a pasta irmã
 Para fixar outro destino antes do primeiro backup, o operador executa localmente:
 
 ```powershell
-python cli.py configurar-raiz 'C:\caminho\dos\backups'
+& .\.venv\Scripts\python.exe cli.py configurar-raiz 'C:\caminho\dos\backups'
 ```
 
 O comando grava a raiz e, por padrão, torna essa própria pasta o único limite
@@ -106,7 +106,7 @@ permitido. Se o operador precisar manter vários destinos sob uma pasta pai,
 define o limite explicitamente:
 
 ```powershell
-python cli.py configurar-raiz 'C:\backups\BackupRestore' --permitida 'C:\backups'
+& .\.venv\Scripts\python.exe cli.py configurar-raiz 'C:\backups\BackupRestore' --permitida 'C:\backups'
 ```
 
 `BACKUPRESTORE_RAIZ_PERMITIDA`, definido no ambiente do processo que executa a
@@ -144,8 +144,9 @@ além do SHA-256. Não apague a pasta `volume\` como parte do rollback.
 O formato do catálogo e dos artefatos não mudou. Para reverter somente o código,
 pare a interface, mantenha `configuracao.local.json` e use a versão anterior;
 ela ignora o campo adicional de limite permitido. Não mova nem apague artefatos
-como parte do rollback. Antes de retomar a rotina, rode `python cli.py verificar`
-e um `python cli.py ensaio --projeto <slug>` no sandbox.
+como parte do rollback. Antes de retomar a rotina, rode
+`.venv\Scripts\python.exe cli.py verificar` e um
+`.venv\Scripts\python.exe cli.py ensaio --projeto <slug>` no sandbox.
 
 ## O que é gravado
 
@@ -190,7 +191,7 @@ O que este projeto é, na prática. Estão em `motor.py` e `restaurar.py`.
    contêiner `backuprestore-sandbox` — não há flag que libere outro destino.
    A allowlist exata barra também nomes novos, renomeados ou informados por
    engano, antes de consultar o Docker ou criar o dump de segurança.
-7. **SHA-256 gravado e reconferível** por `python cli.py verificar`.
+7. **SHA-256 gravado e reconferível** por `.venv\Scripts\python.exe cli.py verificar`.
 
 E a que valida as outras: **um artefato só serve se você já restaurou a partir
 dele.** É o `cli.py ensaio`.
@@ -199,7 +200,7 @@ dele.** É o `cli.py ensaio`.
 
 ## Sandbox
 
-`compose.teste.yaml` sobe um PostgreSQL descartável na porta 5439. É o único
+`compose.yaml` sobe um PostgreSQL descartável na porta 5439. É o único
 destino de restauração que a ferramenta aceita.
 
 O processo do sandbox roda como `postgres`, sem capabilities e com filesystem
@@ -211,20 +212,21 @@ O sandbox também fica limitado a 2 vCPU, para que um dump defeituoso não
 monopolize o host.
 
 ```bash
-docker compose -f compose.teste.yaml up -d
-docker compose -f compose.teste.yaml down -v    # descarta
+docker compose -f compose.yaml up -d
+docker compose -f compose.yaml down -v    # descarta
 ```
 
 ## Verificação
 
-As travas puras de restauração, catálogo e ZIP usam `unittest`, sem dependência
-de desenvolvimento adicional. O ensaio real continua obrigatório quando a
-mudança toca backup ou restauração:
+As travas puras de restauração, catálogo e ZIP rodam no contêiner Python 3.15.
+O ensaio real continua obrigatório quando a mudança toca backup ou restauração:
 
 ```powershell
-python -m unittest discover -s tests -v
-python cli.py verificar
-python cli.py ensaio --projeto <slug>
+docker compose --profile quality build --pull --no-cache quality
+docker compose --profile quality run --rm --no-deps quality
+docker compose --profile quality run --rm --no-deps audit
+& .\.venv\Scripts\python.exe cli.py verificar
+& .\.venv\Scripts\python.exe cli.py ensaio --projeto <slug>
 ```
 
 ---
@@ -232,11 +234,13 @@ python cli.py ensaio --projeto <slug>
 ## CI
 
 O workflow em GitHub Actions roda em push e pull request para `main`, por
-disparo manual e semanalmente. Ele testa a versão mínima Python 3.13 e a versão
-Python mais recente disponível, instala `requirements.txt`, executa os testes
-unitários e compila as fontes. Não roda `verificar` ou `ensaio`, pois esses
-comandos dependem dos artefatos e do sandbox locais. O Dependabot acompanha
-pip e GitHub Actions semanalmente, agrupando atualizações minor/patch.
+disparo manual e semanalmente. Ele testa Python 3.15, instala `requirements.txt`
+na imagem Docker Python 3.15, executa os testes unitários, compila as fontes e
+audita as dependências instaladas. Não roda
+`verificar` ou `ensaio`, pois esses comandos dependem dos artefatos e do sandbox
+locais. O Dependabot acompanha pip, a imagem PostgreSQL do sandbox e GitHub
+Actions semanalmente, agrupando atualizações minor/patch. A série principal do
+PostgreSQL fica em 17 para não trocar o formato do volume sem migração.
 
 ---
 
@@ -281,7 +285,8 @@ e as stacks Docker locais paradas (`contêiner ... não existe` nos backups
 locais). Nos dois casos o catálogo e os artefatos anteriores continuam
 íntegros — o que faltou foi a captura do dia.
 
-Depois da primeira execução, confira o resultado com `python cli.py listar`.
+Depois da primeira execução, confira o resultado com
+`.venv\Scripts\python.exe cli.py listar`.
 
 ### Ensaio mensal
 
@@ -302,7 +307,7 @@ legível fica no arquivo acima; o mesmo runtime Python validado pelo
 `BACKUPRESTORE_PYTHON` é usado pela tarefa.
 
 **A tarefa do VPS precisa do sandbox de pé** (`docker compose -f
-compose.teste.yaml up -d`, uma vez — o script deixa o contêiner parado entre
+compose.yaml up -d`, uma vez — o script deixa o contêiner parado entre
 usos, e a sincronização o liga sozinha quando precisa). Sem ele,
 `sincronizar-vps` recusa com uma mensagem clara em vez de travar.
 

@@ -281,7 +281,7 @@ def verificar_dump_no_sandbox(caminho: str) -> None:
     if not existe:
         raise FalhaDeSincronizacao(
             f"sandbox {CONTAINER_SANDBOX} não existe. Suba com: "
-            "docker compose -f compose.teste.yaml up -d"
+            "docker compose -f compose.yaml up -d"
         )
     if not rodando:
         motor._rodar(["docker", "start", CONTAINER_SANDBOX], tempo_limite=120)

@@ -1,0 +1,67 @@
+FROM python:3.15-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /workspace
+COPY requirements.txt /tmp/requirements.txt
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --no-cache-dir \
+      -r /tmp/requirements.txt \
+      'pip-audit>=2.10,<3' \
+    && python -m pip install --no-cache-dir --upgrade pip setuptools msgpack urllib3
+
+# pip inclui cópias de urllib3/msgpack e um SBOM embutido. Atualiza também o
+# código que o pip importa para que a varredura da imagem reflita os pacotes
+# efetivamente corrigidos, não apenas os metadados globais.
+RUN python - <<'PY'
+import importlib.metadata
+import json
+import shutil
+from pathlib import Path
+
+site = Path("/usr/local/lib/python3.15/site-packages")
+vendor = site / "pip/_vendor"
+versions = {
+    name: importlib.metadata.version(name)
+    for name in ("msgpack", "setuptools", "urllib3")
+}
+
+for name in ("msgpack", "urllib3"):
+    target = vendor / name
+    shutil.rmtree(target, ignore_errors=True)
+    shutil.copytree(site / name, target)
+
+bom_path = vendor / "bom.cdx.json"
+bom = json.loads(bom_path.read_text(encoding="utf-8"))
+replacements = {}
+for component in bom["components"]:
+    name = component["name"].lower()
+    if name not in versions:
+        continue
+    old_ref = component.get("bom-ref") or component.get("purl")
+    new_ref = f"pkg:pypi/{name}@{versions[name]}"
+    component["version"] = versions[name]
+    component["purl"] = new_ref
+    component["bom-ref"] = new_ref
+    if old_ref:
+        replacements[old_ref] = new_ref
+
+for dependency in bom["dependencies"]:
+    if dependency.get("ref") in replacements:
+        dependency["ref"] = replacements[dependency["ref"]]
+    if "dependsOn" in dependency:
+        dependency["dependsOn"] = [
+            replacements.get(reference, reference)
+            for reference in dependency["dependsOn"]
+        ]
+bom_path.write_text(json.dumps(bom, indent=2) + "\n", encoding="utf-8")
+PY
+
+COPY . /workspace
+RUN python -m compileall -q /workspace
+
+CMD ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]

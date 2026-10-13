@@ -91,7 +91,7 @@ def comando_verificar(args: argparse.Namespace) -> int:
     if contagem["nao_verificados"]:
         print(f"   NÃO verificados: {contagem['nao_verificados']} — o sandbox "
               f"{CONTAINER_SANDBOX} não está disponível para reler os dumps.")
-        print("   Suba com: docker compose -f compose.teste.yaml up -d")
+        print("   Suba com: docker compose -f compose.yaml up -d")
         print("   A situação desses artefatos ficou como estava; nada foi julgado.")
     return 1 if (
         contagem["ausentes"] or contagem["corrompidos"] or contagem["nao_verificados"]
@@ -283,7 +283,7 @@ def _ensaiar(projeto: Projeto) -> int:
     existe, rodando = motor.estado_container(CONTAINER_SANDBOX)
     if not existe:
         print("Sandbox não existe. Suba com:\n"
-              "   docker compose -f compose.teste.yaml up -d", file=sys.stderr)
+              "   docker compose -f compose.yaml up -d", file=sys.stderr)
         return 1
     if not rodando:
         motor._rodar(["docker", "start", CONTAINER_SANDBOX], tempo_limite=120)
