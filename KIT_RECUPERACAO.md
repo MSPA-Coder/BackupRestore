@@ -52,11 +52,14 @@ se o sandbox não estiver de pé. Nada é apagado nem movido.
 O que não volta: a marca de **fixado** (não está no manifesto; fixe de novo
 antes do próximo backup, porque a retenção roda ao fim dele), o histórico de
 execuções e eventos, e os dumps de segurança de restauração
-(`pre_restauracao`, sem manifesto). Pasta de projeto que o `projetos.py` não
-conhece é listada e ignorada (hoje, as 36 cópias do NetWorth, que continuam no
-disco mas não voltam ao catálogo). Conferido em 03/10/2026 contra o acervo real:
-das 471 linhas válidas do catálogo, 384 foram reconstruídas idênticas em todos
-os campos; as 87 restantes são as 51 de segurança e essas 36 do NetWorth.
+(`pre_restauracao`, sem manifesto). Pastas de projetos que o `projetos.py` não
+conhece são listadas e ignoradas. Na conferência de 03/10/2026, antes da
+retirada do NetWorth, das 471 linhas válidas do catálogo 384 foram reconstruídas
+idênticas em todos os campos; as 87 restantes eram 51 de segurança e 36
+artefatos do NetWorth. Em 12/10/2026, após autorização do mantenedor, foram
+removidos o checkout local e o repositório GitHub, além dos 36 artefatos e 36
+manifestos de backup. Os registros NetWorth das tabelas de artefatos, execuções
+e eventos também foram apagados; a verificação SQLite terminou com `ok`.
 
 O arquivo de ambiente do MpPortal chama-se `.env`; todos os outros usam
 `.env.docker`. Procurar o nome dos demais ali nao acha nada.
@@ -67,11 +70,10 @@ os segredos que o `compose.yaml` de cada um declara e a tabela não tinha (o
 `postgres_app_password` do ControleBancario): o Compose recusa subir sem eles.
 Conferido contra os arquivos Compose, não contra o disco.
 
-A tabela acima foi conferida contra o disco em 22/09/2026, e cinco das seis
-linhas estavam desatualizadas: faltavam os segredos de qualidade do
-ControleBancario e do Renda Variavel, os dois tokens internos extras do
-ConfortoTermico, o `database_url`, a `senha-inicial.txt` do NetWorth e o
-`rtd-control-token` do agente; o `collector_agent_token` virou um par
+A tabela acima foi conferida contra o disco em 22/09/2026. Naquela conferência
+foram detectadas lacunas nos segredos de qualidade do ControleBancario e do
+Renda Variavel, nos tokens internos extras do ConfortoTermico, no `database_url`
+e no `rtd-control-token` do agente; o `collector_agent_token` virou um par
 `read`/`write`; e o MpPortal usa `.env`, nao `.env.docker`.
 
 O desvio nao era visivel: os segredos nasceram e mudaram de nome nos projetos,
@@ -95,8 +97,11 @@ momento possivel.
   O banco SQLite e o cofre de segredos são cifrados com ela. A cópia diária
   (`volume/*.tar.gz`) sem a chave não abre, e a chave não pode ser recriada:
   guarde-a no cofre antes de precisar da cópia, não depois.
-- O NetWorth (prova de conceito) foi aposentado em 29/09/2026. Os dumps antigos
-  do banco dele ficam no acervo, sem retenção nem verificação novas.
+- O NetWorth foi aposentado em 29/09/2026. Em 12/10/2026 foram removidos o
+  checkout local, o repositório GitHub e os 72 arquivos de backup locais (33
+  dumps, 3 ZIPs e 36 manifestos), após autorização do mantenedor. Não há cópia
+  de recuperação do NetWorth no acervo atual. O histórico de uso em produção
+  não é conclusivo: os registros disponíveis divergem.
 
 ## VPS (producao)
 

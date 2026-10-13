@@ -251,7 +251,7 @@ class BackupRootGuardTests(unittest.TestCase):
                 self.assertEqual(configuracao.raiz_permitida(), str(environment.resolve()))
 
     def test_sandbox_compose_has_no_host_backup_bind(self) -> None:
-        compose = Path(__file__).resolve().parents[1] / "compose.teste.yaml"
+        compose = Path(__file__).resolve().parents[1] / "compose.yaml"
         content = compose.read_text(encoding="utf-8")
         self.assertNotIn("/backups", content)
         self.assertNotIn("C:/Users/MSPA", content)

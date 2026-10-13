@@ -46,7 +46,7 @@ CAMINHO_CATALOGO = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "catalogo.sqlite3"
 )
 
-# Contêiner descartável de `compose.teste.yaml`. É o único destino de
+# Contêiner descartável de `compose.yaml`. É o único destino de
 # restauração que o motor aceita.
 CONTAINER_SANDBOX = "backuprestore-sandbox"
 

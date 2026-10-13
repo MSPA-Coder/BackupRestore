@@ -6,16 +6,16 @@ cd /d "%~dp0"
 
 if defined BACKUPRESTORE_PYTHON (
     set "PY=%BACKUPRESTORE_PYTHON%"
-) else if exist "%LOCALAPPDATA%\Python\bin\python.exe" (
-    set "PY=%LOCALAPPDATA%\Python\bin\python.exe"
+) else if exist "%~dp0.venv\Scripts\python.exe" (
+    set "PY=%~dp0.venv\Scripts\python.exe"
 ) else (
-    set "PY=python"
+    set "PY=%LOCALAPPDATA%\Python\bin\python.cmd"
 )
 
 "%PY%" -c "import flask, sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)" >nul 2>&1
 if errorlevel 1 (
-    echo ERRO: Python 3.13 ou superior com Flask nao foi encontrado.
-    echo Defina BACKUPRESTORE_PYTHON com o caminho de um runtime validado.
+    echo ERRO: Python 3.15 com Flask nao foi encontrado.
+    echo Recrie .venv com Python 3.15 ou defina BACKUPRESTORE_PYTHON.
     pause
     exit /b 1
 )

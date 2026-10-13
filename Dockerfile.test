@@ -1,0 +1,16 @@
+FROM python:3.15-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /workspace
+COPY requirements.txt /tmp/requirements.txt
+RUN python -m pip install --no-cache-dir \
+      -r /tmp/requirements.txt \
+      'pip-audit>=2.10,<3'
+
+COPY . /workspace
+RUN python -m compileall -q /workspace
+
+CMD ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]

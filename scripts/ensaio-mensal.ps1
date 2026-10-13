@@ -17,10 +17,12 @@ $projectDir = Split-Path -Parent $PSScriptRoot
 $python = $null
 if ($env:BACKUPRESTORE_PYTHON) {
     $python = $env:BACKUPRESTORE_PYTHON
-} elseif (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "Python\bin\python.exe")) {
-    $python = Join-Path $env:LOCALAPPDATA "Python\bin\python.exe"
+} elseif (Test-Path -LiteralPath (Join-Path $projectDir ".venv\Scripts\python.exe")) {
+    $python = Join-Path $projectDir ".venv\Scripts\python.exe"
+} elseif (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA "Python\bin\python.cmd")) {
+    $python = Join-Path $env:LOCALAPPDATA "Python\bin\python.cmd"
 } else {
-    $python = (Get-Command python -ErrorAction Stop).Source
+    throw "Python 3.15 nao encontrado. Recrie .venv ou configure BACKUPRESTORE_PYTHON."
 }
 
 $cli = Join-Path $projectDir "cli.py"

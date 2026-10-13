@@ -29,18 +29,15 @@ decisoes historicas.
 
 ## Ambiente e versoes
 
-A aplicacao usa Python no host como excecao deliberada ao padrao container-first.
-O interpretador deve satisfazer a versao minima declarada pelo projeto e importar
-as dependencias instaladas; nao dependa de uma instalacao global escolhida por
-acidente pelo `PATH`. `iniciar.bat` seleciona, nesta ordem,
-`BACKUPRESTORE_PYTHON`, `%LOCALAPPDATA%\Python\bin\python.exe` e `python` do
-`PATH`; nao introduza fallback para diretorio interno de versao especifica.
+A aplicacao usa Python no host porque coordena o Docker sem montar o socket em
+um contêiner. O runtime padrao e Python 3.15 no `.venv`; `iniciar.bat` seleciona,
+nesta ordem, `BACKUPRESTORE_PYTHON`, `.venv\Scripts\python.exe` e o wrapper
+estavel `%LOCALAPPDATA%\Python\bin\python.cmd`. Nao use diretorios internos
+versionados nem o alias da Microsoft Store.
 
-Versoes documentadas como "testadas" sao um estado operacional atual, nao um
-congelamento. Declare separadamente a versao minima suportada, a versao testada e
-a proxima candidata. Atualize de forma deliberada, executando a verificacao e um
-ensaio de restauracao. O PostgreSQL do sandbox fixa a versao principal porque
-mudancas de formato de dados exigem migracao explicita.
+Python 3.15 e a versao padrao para o runtime local e para a imagem de teste. As
+imagens de banco mantem sua serie principal para preservar compatibilidade com
+os volumes; Dependabot atualiza os patches semanalmente e a CI valida a imagem.
 
 Nunca instale dependencias silenciosamente no host. Se o runtime configurado
 estiver ausente ou invalido, diagnostique e proponha uma instalacao reproduzivel.
@@ -70,7 +67,7 @@ confirmados sob a raiz antes de leitura, remocao ou restauracao.
 
 O sandbox `backuprestore-sandbox` e o unico destino autorizado para restauracao
 automatica. Nunca aponte ensaios aos volumes operacionais. `down -v` somente e
-permitido para o Compose descartavel `compose.teste.yaml`, depois de confirmar o
+permitido para o Compose descartavel `compose.yaml`, depois de confirmar o
 nome do projeto Compose.
 
 Segredos, certificados e arquivos ignorados nao fazem parte do ZIP de codigo.
@@ -78,20 +75,23 @@ Nao os adicione sem uma estrategia de cifra, acesso e recuperacao aprovada.
 
 ## Validacao proporcional
 
-Comandos de referencia, usando o runtime Python configurado:
+Os testes, compilacao e auditoria de dependencias rodam no contêiner de
+qualidade; os comandos de operacao usam o `.venv` local:
 
 ```powershell
-python -m unittest discover -s tests -v
-python cli.py verificar
-python cli.py ensaio --projeto <slug>
+docker compose --profile quality build --pull --no-cache quality
+docker compose --profile quality run --rm --no-deps quality
+docker compose --profile quality run --rm --no-deps audit
+& .\.venv\Scripts\python.exe cli.py verificar
+& .\.venv\Scripts\python.exe cli.py ensaio --projeto <slug>
 ```
 
 - Documentacao ou interface sem efeito operacional: confira links, comandos e o
   fluxo afetado.
-- Catalogo e regras puras: execute os testes automatizados relacionados.
+- Catalogo e regras puras: execute os testes automatizados no contêiner quality.
 - Backup, retencao, restauracao ou selecao de alvo: execute testes, `verificar`
   e ao menos um `ensaio` real no sandbox.
-- Mudanca no sandbox: valide `docker compose -f compose.teste.yaml config
+- Mudanca no sandbox: valide `docker compose -f compose.yaml config
   --quiet`, suba o servico, aguarde o health check e descarte somente o volume
   do sandbox ao concluir.
 

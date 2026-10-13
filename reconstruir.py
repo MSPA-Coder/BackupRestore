@@ -30,8 +30,7 @@ O QUE NÃO VOLTA, E É PRECISO SABER
 - O histórico de execuções e de eventos não volta (é o diário, não o acervo).
 - Dumps de segurança de restauração (`pre_restauracao`) não têm manifesto e
   ficam de fora; são regraváveis e não contam como acervo.
-- Pasta de projeto que o `projetos.py` não conhece (o NetWorth, por exemplo) é
-  listada e ignorada.
+- Pastas de projetos desconhecidos pelo `projetos.py` são listadas e ignoradas.
 
 Nada aqui apaga ou move arquivo.
 """
@@ -219,7 +218,7 @@ def _tratar(slug, tipo, entrada, ja_no_catalogo, sandbox, relatorio, aplicar) ->
             if not _sandbox_de_pe(sandbox):
                 relatorio.nao_verificados.append(
                     f"{rotulo} (sandbox {CONTAINER_SANDBOX} indisponível; suba com: "
-                    "docker compose -f compose.teste.yaml up -d)"
+                    "docker compose -f compose.yaml up -d)"
                 )
                 return
             motor._reler_dump(CONTAINER_SANDBOX, entrada.path)

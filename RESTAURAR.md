@@ -186,7 +186,7 @@ python cli.py verificar
 
 ## Ensaiar sem risco
 
-O sandbox (`compose.teste.yaml`) é um PostgreSQL descartável na porta 5439. O
+O sandbox (`compose.yaml`) é um PostgreSQL descartável na porta 5439. O
 comando abaixo restaura o dump mais recente lá dentro e compara as contagens de
 linha com o projeto original:
 
