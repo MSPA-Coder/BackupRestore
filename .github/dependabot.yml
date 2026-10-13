@@ -29,9 +29,22 @@ updates:
       interval: weekly
       timezone: America/Sao_Paulo
     open-pull-requests-limit: 3
+    # Esta imagem e criada pelo proprio Compose; o sandbox nunca existe no Docker Hub.
     ignore:
+      - dependency-name: "mspa-postgres"
       - dependency-name: "postgres"
         update-types: ["version-update:semver-major"]
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: docker
+    directory: "/docker/sandbox-postgres"
+    schedule:
+      interval: weekly
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 3
     groups:
       minor-and-patch:
         applies-to: version-updates
