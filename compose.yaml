@@ -62,8 +62,8 @@ services:
   sandbox:
     image: mspa-postgres:17-alpine
     build:
-      context: .
-      dockerfile: Dockerfile.postgres
+      context: ./docker/sandbox-postgres
+      dockerfile: Dockerfile
       pull: true
       no_cache: true
     pull_policy: build
