@@ -233,14 +233,16 @@ docker compose --profile quality run --rm --no-deps audit
 
 ## CI
 
-O workflow em GitHub Actions roda em push e pull request para `main`, por
-disparo manual e semanalmente. Ele testa Python 3.15, instala `requirements.txt`
-na imagem Docker Python 3.15, executa os testes unitários, compila as fontes e
-audita as dependências instaladas. Não roda
-`verificar` ou `ensaio`, pois esses comandos dependem dos artefatos e do sandbox
-locais. O Dependabot acompanha pip, a imagem PostgreSQL do sandbox e GitHub
-Actions semanalmente, agrupando atualizações minor/patch. A série principal do
-PostgreSQL fica em 17 para não trocar o formato do volume sem migração.
+O workflow em GitHub Actions roda em push para `main`, em pull requests para
+qualquer branch de destino, por disparo manual e semanalmente. Ele testa Python
+3.15, instala `requirements.txt` na imagem Docker Python 3.15, executa os testes
+unitários, compila as fontes e audita as dependências instaladas. Também analisa
+as imagens PostgreSQL do sandbox e quality com Trivy, reprovando CVEs corrigíveis
+de severidade HIGH ou CRITICAL. Não roda `verificar` ou `ensaio`, pois esses
+comandos dependem dos artefatos e do sandbox locais. O Dependabot acompanha pip,
+a imagem PostgreSQL do sandbox e GitHub Actions semanalmente, agrupando
+atualizações minor/patch. A série principal do PostgreSQL fica em 17 para não
+trocar o formato do volume sem migração.
 
 ---
 
