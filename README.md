@@ -56,13 +56,15 @@ a regra 3 deste lado: se algum dump da rodada reprovou, a limpeza é suspensa,
 porque reduzir o acervo numa rodada em que a captura falhou seria apagar sem
 ter o substituto.
 
-São dois servidores: o principal, com os quatro aplicativos e o Wealthfolio, e
-o do portal (`mp_portal_vps`). O campo `servidor` de cada projeto em
-`projetos.py` diz de qual deles o dump vem. Configure cada alvo uma vez:
+Hoje há um servidor só: o principal, com os quatro aplicativos e o Wealthfolio.
+O portal saiu do VPS dedicado e `mp_portal_vps` deixou o catálogo em 19/10/2026
+(os dumps já catalogados ficam no disco). O mecanismo de vários servidores
+continua: o campo `servidor` de cada projeto em `projetos.py` diz de qual deles
+o dump vem. Configure cada alvo uma vez:
 
 ```powershell
 & .\.venv\Scripts\python.exe cli.py configurar-vps <host> --usuario ubuntu --chave 'C:\caminho\da\chave-dedicada'
-& .\.venv\Scripts\python.exe cli.py configurar-vps <host-do-portal> --servidor portal --chave 'C:\caminho\da\chave-dedicada'
+& .\.venv\Scripts\python.exe cli.py configurar-vps <host-de-outro-servidor> --servidor <nome> --chave 'C:\caminho\da\chave-dedicada'
 ```
 
 A mesma chave dedicada pode servir aos dois servidores: em cada um ela entra no

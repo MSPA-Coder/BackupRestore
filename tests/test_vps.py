@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import hashlib
 import io
@@ -391,9 +392,9 @@ class SincronizarProjetoTests(unittest.TestCase):
         fechar.assert_called_once_with(999, "falha", "VPS não configurado")
 
     def test_cada_projeto_busca_no_proprio_servidor(self) -> None:
-        # O portal roda noutro VPS: sincronizar tem de pedir o alvo do servidor
-        # do projeto, e não sempre o principal.
-        portal = next(p for p in PROJETOS if p.slug == "mp_portal_vps")
+        # Um projeto pode vir de outro VPS: sincronizar tem de pedir o alvo do
+        # servidor do projeto, e não sempre o principal.
+        portal = dataclasses.replace(PROJETO_VPS, slug="outro_vps", servidor="portal")
         vazio = subprocess.CompletedProcess(args=[], returncode=0, stdout=b"", stderr=b"")
         for projeto in (PROJETO_VPS, portal):
             with (

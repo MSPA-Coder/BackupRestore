@@ -62,9 +62,9 @@ RETENCAO_VPS = 14
 
 # Nome do alvo SSH de onde um projeto `ambiente="vps"` é buscado. Cada nome
 # corresponde a um alvo gravado por `cli.py configurar-vps --servidor <nome>`.
-# O portal roda num VPS dedicado desde 13/09/2026; os outros cinco seguem no
-# servidor principal.
-SERVIDOR_PORTAL = "portal"
+# Hoje todos os projetos vêm do servidor principal: o portal saiu do VPS dedicado
+# em 10/2026 (foi para a Hostinger) e `mp_portal_vps` saiu do catálogo em 19/10/2026.
+# O mecanismo de vários servidores continua, para um segundo VPS voltar a existir.
 
 
 @dataclass(frozen=True)
@@ -191,20 +191,8 @@ PROJETOS: tuple[Projeto, ...] = (
     # `networth` e `networth_vps` saíram do catálogo em 29/09/2026: o NetWorth (prova
     # de conceito) foi aposentado, local e no VPS
     # (o Wealthfolio opera no domínio dele). Os dumps já catalogados ficam no
-    # disco, sem retenção nem verificação novas.
-    # Mesmo agente restrito e mesmo formato de dump; muda só o alvo SSH.
-    Projeto(
-        slug="mp_portal_vps",
-        nome="MP Portal (VPS)",
-        pasta="",
-        container="mp-portal-postgres-1",
-        usuario="mp_portal",
-        banco="mp_portal",
-        ambiente=AMBIENTE_VPS,
-        retencao=RETENCAO_VPS,
-        tipos=("banco",),
-        servidor=SERVIDOR_PORTAL,
-    ),
+    # disco, sem retenção nem verificação novas. O mesmo vale para `mp_portal_vps`,
+    # retirado em 19/10/2026.
     # O Wealthfolio não tem Postgres: o patrimônio fica num SQLite dentro do
     # volume `wealthfolio-teste-data`, e o que vem do servidor é a cópia desse
     # diretório (`volume/*.tar.gz`), feita lá com o contêiner pausado. Usuário
