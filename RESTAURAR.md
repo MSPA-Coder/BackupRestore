@@ -35,8 +35,9 @@ do VPS, buscado e verificado pela Camada 2 (`vps.py`/`cli.py sincronizar-vps`)
 — não existe pasta `codigo\` para eles, porque o código do VPS é espelho do
 `main` no GitHub (não um artefato deste sistema; ver "Reconstrução completa"
 abaixo). `<projeto>` vira `conforto_termico_vps`, `mega_sena_vps`,
-`controle_bancario_vps`, `controle_renda_variavel_vps`, `wealthfolio_teste_vps`
-e `mp_portal_vps` — este último vem do VPS dedicado do portal. O Wealthfolio
+`controle_bancario_vps`, `controle_renda_variavel_vps` e `wealthfolio_teste_vps`
+(o antigo `mp_portal_vps` foi retirado em 19/10/2026; as cópias já catalogadas
+continuam no disco). O Wealthfolio
 não tem dump: tem `volume\`, com o procedimento próprio descrito em "Wealthfolio a
 partir da cópia do volume", abaixo. O `.manifest.json` de
 um dump VPS tem `"origem": {"servidor": ..., "arquivo_remoto": ...}` em vez de
@@ -70,7 +71,7 @@ docker compose up -d <servico-postgres>
 ```
 
 O serviço se chama `postgres` em Controle Bancário, Mega-Sena, Conforto
-Térmico e MP Portal, e `db` em Controle de Renda Variável.
+Térmico (e MP Portal, nas cópias antigas), e `db` em Controle de Renda Variável.
 
 Antes do resto: se a aplicação subir junto, as migrações criam um esquema vazio
 que o `pg_restore` vai derrubar em seguida. Funciona, mas restaurar sobre banco

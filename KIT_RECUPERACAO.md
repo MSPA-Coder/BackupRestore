@@ -107,8 +107,8 @@ momento possivel.
 
 Os arquivos abaixo vivem só nos servidores, fora do Git — a Camada 2 do backup
 (`vps.py`) **nunca os toca**. Copiar para o cofre continua sendo tarefa manual,
-a mesma dos locais. Os cinco primeiros ficam no VPS compartilhado; o portal,
-num VPS dedicado.
+a mesma dos locais. Os cinco ficam no VPS compartilhado (o portal saiu do VPS
+dedicado em 10/2026).
 
 | Projeto (no VPS) | Fora do Git, indispensável |
 |---|---|
@@ -117,7 +117,6 @@ num VPS dedicado.
 | `wealthfolio-teste` | `.env` (este usa `.env`, não `.env.vps`: `WF_SECRET_KEY_HOST_PATH`, `WF_AUTH_PASSWORD_HASH`, `WF_ADDON_NETWORK_PRIVATE_TARGETS`); o arquivo da **chave mestra**, apontado por `WF_SECRET_KEY_HOST_PATH` e guardado fora do checkout |
 | `mega-sena` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `conforto-termico` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
-| `mp-portal` (VPS dedicado) | `.env.vps`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
 
 Não é o mesmo inventário dos locais acima. Confirme os nomes contra a
 configuração da versão restaurada antes de cada ensaio.
