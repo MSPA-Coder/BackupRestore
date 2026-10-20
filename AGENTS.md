@@ -95,18 +95,13 @@ docker compose --profile quality run --rm --no-deps audit
   --quiet`, suba o servico, aguarde o health check e descarte somente o volume
   do sandbox ao concluir.
 
-A suíte completa do contêiner quality não roda mais na máquina antes do PR: a
-CI do PR executa exatamente o mesmo contêiner. Localmente, rode só os testes
-focados no que mudou (além de `verificar` e `ensaio`, que a CI não roda), e a
-suíte completa apenas para reproduzir uma falha da CI.
-
-O `main` é protegido: toda mudança entra por PR com squash merge, histórico
-linear e os checks obrigatórios verdes. A branch não precisa estar atualizada
-em relação ao `main`; não faça merge do `main` nela só para o PR entrar. O
-auto-merge está ligado: depois de `gh pr create`, rode
-`gh pr merge <n> --auto --squash`, e o PR entra sozinho quando os checks
-passarem. Nunca `--admin`, nunca push forçado, nunca rebase em branch
-publicada.
+Em qualquer mudança de código, rode a suíte completa do contêiner quality na
+máquina antes do commit: é essa verificação que vale. O commit vai direto ao
+`main`, com `git push`, sem PR e sem esperar nada; a regra do `main` continua
+impedindo apagá-lo ou reescrever o histórico (nada de push forçado nem de
+rebase do `main`). A CI roda depois de cada push só como aviso e não bloqueia
+nada; se falhar, investigue. O Dependabot continua por PR, com os checks
+obrigatórios e auto-merge.
 
 O que merece teste, em que camada e em que forma está em `docs/TESTES.md`,
 comum aos repositórios; leia antes de escrever ou remover um teste. Diante de

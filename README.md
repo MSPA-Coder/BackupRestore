@@ -241,13 +241,13 @@ qualquer branch de destino, por disparo manual e semanalmente. Ele testa Python
 unitários, compila as fontes e audita as dependências instaladas. Também analisa
 as imagens PostgreSQL do sandbox e quality com Trivy, reprovando CVEs corrigíveis
 de severidade HIGH ou CRITICAL. Não roda `verificar` ou `ensaio`, pois esses
-comandos dependem dos artefatos e do sandbox locais. Como a CI do PR roda o
-mesmo contêiner quality, a suíte completa não roda mais na máquina antes do PR:
-localmente, rode só os testes focados no que mudou, e a completa apenas para
-reproduzir uma falha da CI. O Dependabot acompanha pip,
+comandos dependem dos artefatos e do sandbox locais. Depois de cada push, a CI
+é só aviso: a verificação que vale é a suíte completa na máquina antes do
+commit, que vai direto ao `main`, sem PR. O Dependabot acompanha pip,
 a imagem PostgreSQL do sandbox e GitHub Actions semanalmente, agrupando
-atualizações minor/patch. A série principal do PostgreSQL fica em 17 para não
-trocar o formato do volume sem migração.
+atualizações minor/patch, por PR com os checks obrigatórios e auto-merge. A
+série principal do PostgreSQL fica em 17 para não trocar o formato do volume
+sem migração.
 
 ---
 
