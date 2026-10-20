@@ -231,6 +231,18 @@ docker compose --profile quality run --rm --no-deps audit
 & .\.venv\Scripts\python.exe cli.py ensaio --projeto <slug>
 ```
 
+Para conferir o fluxo completo com dados exclusivamente sintéticos, sem abrir
+o catálogo ou os backups do operador, há um ensaio separado:
+
+```powershell
+& .\.venv\Scripts\python.exe tests\ensaio_sintetico.py
+```
+
+Ele exige o `backuprestore-sandbox` já disponível, recusa nomes de banco que
+já existam, usa um catálogo temporário e executa o motor e a restauração reais.
+Confere precisão decimal, Unicode, tabela vazia, dump de segurança e reexecução;
+ao concluir remove somente os dois bancos que acabou de criar no sandbox.
+
 ---
 
 ## CI
