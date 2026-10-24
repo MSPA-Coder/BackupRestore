@@ -95,7 +95,7 @@ class ResumoLegivelTests(unittest.TestCase):
     despercebida."""
 
     def test_resumo_nomeia_projeto_operacao_e_motivo_inteiro(self) -> None:
-        motivo = "listar falhou: ssh: connect to host 100.94.82.91 port 22: Permission denied"
+        motivo = "listar falhou: ssh: connect to host 192.0.2.1 port 22: Permission denied"
         texto = agendamento.montar_resumo(
             inicio=datetime(2026, 9, 2, 3, 30),
             fim=datetime(2026, 9, 2, 3, 41),

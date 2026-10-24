@@ -360,7 +360,7 @@ class VpsTargetConfigTests(unittest.TestCase):
             with patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(Path(directory, "config.json"))):
                 with self.assertRaises(configuracao.ConfiguracaoInvalida):
                     configuracao.configurar_vps(
-                        "163.176.214.214", "ubuntu", str(Path(directory, "nao-existe.key"))
+                        "192.0.2.10", "ubuntu", str(Path(directory, "nao-existe.key"))
                     )
 
     def test_valid_target_is_persisted_and_readable(self) -> None:
@@ -368,10 +368,10 @@ class VpsTargetConfigTests(unittest.TestCase):
             chave = Path(directory, "chave.key")
             chave.write_text("fake")
             with patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(Path(directory, "config.json"))):
-                configuracao.configurar_vps("163.176.214.214", "ubuntu", str(chave))
+                configuracao.configurar_vps("192.0.2.10", "ubuntu", str(chave))
                 alvo = configuracao.alvo_vps()
         self.assertEqual(
-            alvo, {"host": "163.176.214.214", "usuario": "ubuntu", "chave": str(chave)}
+            alvo, {"host": "192.0.2.10", "usuario": "ubuntu", "chave": str(chave)}
         )
 
     def test_configuring_vps_preserves_existing_backup_root(self) -> None:
@@ -381,10 +381,10 @@ class VpsTargetConfigTests(unittest.TestCase):
             arquivo = Path(directory, "config.json")
             arquivo.write_text(json.dumps({"raiz_backup": "D:/Backups/BackupRestore"}))
             with patch.object(configuracao, "ARQUIVO_CONFIGURACAO", str(arquivo)):
-                configuracao.configurar_vps("163.176.214.214", "ubuntu", str(chave))
+                configuracao.configurar_vps("192.0.2.10", "ubuntu", str(chave))
                 dados = json.loads(arquivo.read_text())
         self.assertEqual(dados["raiz_backup"], "D:/Backups/BackupRestore")
-        self.assertEqual(dados["vps"]["host"], "163.176.214.214")
+        self.assertEqual(dados["vps"]["host"], "192.0.2.10")
 
     def test_named_server_is_stored_apart_from_principal(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
