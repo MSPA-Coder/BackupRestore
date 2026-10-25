@@ -133,10 +133,11 @@ arquivo apontado por `WF_SECRET_KEY_HOST_PATH` (ver
 [KIT_RECUPERACAO.md](KIT_RECUPERACAO.md)). Confira que o kit tem a chave antes
 de qualquer outro passo.
 
-**1. Imagem.** O `compose.yaml` do WealthfolioTeste constrói a imagem de uma
-pasta fora do Git (`../CodexTemp/wealthfolio-v3.9.1`). Num servidor novo,
-baixe o Wealthfolio `v3.9.1` nesse caminho e aplique
-`scripts/apply-upstream-patches.sh` antes do `docker compose build`.
+**1. Imagem.** O `compose.yaml` do WealthfolioTeste constrói a imagem a partir
+do próprio repositório (`build: context: .`): o `Dockerfile` baixa o commit
+upstream fixado em `WEALTHFOLIO_COMMIT` e aplica `patches/`. Num servidor novo,
+clone o repositório WealthfolioTeste e rode `docker compose build`; não há nada
+a baixar à mão. O build é demorado.
 
 **2. Configuração.** Recoloque o `.env` e a chave mestra do kit, com o
 `WF_SECRET_KEY_HOST_PATH` apontando para a chave.

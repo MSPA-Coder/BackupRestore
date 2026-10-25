@@ -101,7 +101,7 @@ máquina antes do commit: é essa verificação que vale. O commit vai direto ao
 impedindo apagá-lo ou reescrever o histórico (nada de push forçado nem de
 rebase do `main`). A CI roda depois de cada push só como aviso e não bloqueia
 nada; se falhar, investigue. O Dependabot continua por PR, com os checks
-obrigatórios e auto-merge.
+obrigatórios; o merge é manual (o workflow de auto-merge foi removido).
 
 O que merece teste, em que camada e em que forma está em `docs/TESTES.md`,
 comum aos repositórios; leia antes de escrever ou remover um teste. Diante de

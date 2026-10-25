@@ -13,9 +13,9 @@ arquivos operacionais nem os segredos provisionados.
 | Projeto | Arquivos externos esperados |
 |---|---|
 | `ControleBancario` | `.env.docker`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/django_secret_key`, `.secrets/patrimonio_integration_token`; os três de qualidade `.secrets/quality_postgres_password`, `.secrets/quality_django_secret_key`, `.secrets/quality_patrimonio_integration_token`; `.certs/local-root-ca.crt` |
-| `ControleRendaVariavel` | `.env`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, `.secrets/database_url`, `.secrets/patrimonio_integration_token`; o par do coletor `.secrets/collector_agent_read_token` e `.secrets/collector_agent_write_token`; os três de qualidade `.secrets/postgres_password_quality`, `.secrets/postgres_app_password_quality` e `.secrets/patrimonio_integration_token_quality`; `.certs/local-root-ca.crt`; se o agente RTD estiver instalado, `.docker-local/remote-collector.env` e `.docker-local/rtd-control-token` |
-| `MegaSena` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
-| `ConfortoTermico` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; os três tokens internos `.secrets/internal_token.txt`, `.secrets/internal_control_token.txt`, `.secrets/internal_read_token.txt`; `.certs/local-root-ca.crt` |
+| `ControleRendaVariavel` | `.env`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, `.secrets/database_url`, `.secrets/patrimonio_integration_token`, `.secrets/cb_patrimonio_token`; o par do coletor `.secrets/collector_agent_read_token` e `.secrets/collector_agent_write_token`; os três de qualidade `.secrets/postgres_password_quality`, `.secrets/postgres_app_password_quality` e `.secrets/patrimonio_integration_token_quality`; `.certs/local-root-ca.crt`; se o agente RTD estiver instalado, `.docker-local/remote-collector.env` e `.docker-local/rtd-control-token` |
+| `MegaSena` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/postgres_app_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
+| `ConfortoTermico` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/postgres_app_password.txt`, `.secrets/secret_key.txt`; os três tokens internos `.secrets/internal_token.txt`, `.secrets/internal_control_token.txt`, `.secrets/internal_read_token.txt`; `.certs/local-root-ca.crt` |
 | `MpPortal` | `.env`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
 | `BackupRestore` | `configuracao.local.json` (endereço do VPS, usuário e caminho da chave SSH) e `agendamento.local.json` |
 | `WealthfolioTeste` (se houver instância local) | `.env`; o arquivo da **chave mestra**, apontado por `WF_SECRET_KEY_HOST_PATH` no `.env` e guardado fora do checkout |
@@ -113,10 +113,10 @@ dedicado em 10/2026).
 | Projeto (no VPS) | Fora do Git, indispensável |
 |---|---|
 | `controle-bancario` | `.env.vps`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/django_secret_key`, `.secrets/patrimonio_integration_token` (ou na pasta de `COMPOSE_SECRETS_DIRECTORY`, se o `.env.vps` a definir); `.certs/local-root-ca.crt` |
-| `controle-renda-variavel` | `.env.vps` (inclui `PATRIMONIO_TITULAR`); `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, o par do coletor `.secrets/collector_agent_read_token` e `.secrets/collector_agent_write_token`, `.secrets/patrimonio_integration_token`; `.certs/local-root-ca.crt` |
+| `controle-renda-variavel` | `.env.vps` (inclui `PATRIMONIO_TITULAR`); `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, o par do coletor `.secrets/collector_agent_read_token` e `.secrets/collector_agent_write_token`, `.secrets/patrimonio_integration_token`, `.secrets/cb_patrimonio_token`; `.certs/local-root-ca.crt` |
 | `wealthfolio-teste` | `.env` (este usa `.env`, não `.env.vps`: `WF_SECRET_KEY_HOST_PATH`, `WF_AUTH_PASSWORD_HASH`, `WF_ADDON_NETWORK_PRIVATE_TARGETS`); o arquivo da **chave mestra**, apontado por `WF_SECRET_KEY_HOST_PATH` e guardado fora do checkout |
-| `mega-sena` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
-| `conforto-termico` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
+| `mega-sena` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/postgres_app_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
+| `conforto-termico` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/postgres_app_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 
 Não é o mesmo inventário dos locais acima. Confirme os nomes contra a
 configuração da versão restaurada antes de cada ensaio.
