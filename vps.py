@@ -42,8 +42,8 @@ from dataclasses import dataclass, field
 
 import banco
 import motor
-from configuracao import SERVIDOR_PRINCIPAL, alvo_vps, caminho_sob_raiz
-from projetos import AMBIENTE_VPS, CONTAINER_SANDBOX, Projeto
+from configuracao import SERVIDOR_PRINCIPAL, alvo_vps, caminho_sob_raiz, servidores_vps
+from projetos import AMBIENTE_VPS, CONTAINER_SANDBOX, PROJETOS, Projeto, projeto_descoberto
 
 TEMPO_LIMITE_COMANDO = 60
 TEMPO_LIMITE_ENVIO = 600
@@ -243,6 +243,52 @@ def listar_remoto(alvo: dict[str, str], slug_servidor: str | None = None) -> lis
             tipo=m["tipo"],
         ))
     return dumps
+
+
+@dataclass
+class Descoberta:
+    """O que os servidores mostram e o catálogo ainda não conhece."""
+
+    novos: list[Projeto] = field(default_factory=list)
+    avisos: list[str] = field(default_factory=list)
+    falhas: list[str] = field(default_factory=list)
+
+
+def descobrir_projetos(conhecidos: tuple[Projeto, ...] = PROJETOS) -> Descoberta:
+    """Pergunta a cada servidor configurado quais pastas ele tem em `~/backups`
+    e devolve as que nenhum projeto cobre ainda.
+
+    Cópia de arquivos (`volume`: os sites e a configuração do servidor) vira
+    projeto novo sozinha. Banco novo não: a restauração precisa de usuário,
+    banco e contêiner, que só quem cadastra sabe — vira aviso. Servidor que não
+    responde é falha da descoberta, e os projetos já conhecidos dele seguem
+    tentando a sincronização normal (e falhando com a mensagem de lá)."""
+    resultado = Descoberta()
+    cobertos = {(p.servidor, p.slug_servidor) for p in conhecidos if p.ambiente == AMBIENTE_VPS}
+    for servidor, alvo in servidores_vps().items():
+        try:
+            remotos = listar_remoto(alvo)
+        except FalhaDeSincronizacao as erro:
+            # No catálogo, para o resumo da execução agendada mostrar: um
+            # servidor sem projeto conhecido não deixaria rastro nenhum.
+            execucao_id = banco.abrir_execucao(f"servidor_{servidor}", "descoberta")
+            banco.fechar_execucao(execucao_id, "falha", str(erro))
+            resultado.falhas.append(f"servidor {servidor!r}: {erro}")
+            continue
+        tipos: dict[str, set[str]] = {}
+        for dump in remotos:
+            tipos.setdefault(dump.slug_servidor, set()).add(dump.tipo)
+        for slug_remoto in sorted(tipos):
+            if (servidor, slug_remoto) in cobertos:
+                continue
+            if "banco" in tipos[slug_remoto]:
+                resultado.avisos.append(
+                    f"banco novo '{slug_remoto}' no servidor {servidor!r}: "
+                    "cadastre-o em PROJETOS_FIXOS (projetos.py) para entrar no backup"
+                )
+                continue
+            resultado.novos.append(projeto_descoberto(slug_remoto, servidor))
+    return resultado
 
 
 def enviar_remoto(alvo: dict[str, str], dump: DumpRemoto, destino: str) -> None:

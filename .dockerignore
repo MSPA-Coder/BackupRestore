@@ -23,6 +23,7 @@ logs
 catalogo.sqlite3*
 configuracao.local.json
 agendamento.local.json
+projetos-descobertos.local.json
 ultima-execucao.txt
 ensaio-mensal-ultimo.txt
 

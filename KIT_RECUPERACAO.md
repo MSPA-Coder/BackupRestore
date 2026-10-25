@@ -118,6 +118,12 @@ dedicado em 10/2026).
 | `mega-sena` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/postgres_app_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `conforto-termico` | `.env.vps`; `.secrets/postgres_password.txt`, `.secrets/postgres_app_password.txt`, `.secrets/internal_token.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 
+Desde 25/10/2026 a lista atual sai pronta do servidor: o `INVENTARIO.txt` da
+cópia `configuracao_servidor_vps` (e `_vps2`) diz, site por site, os nomes dos
+segredos que ficaram fora da cópia, e os de `/etc` (como
+`/etc/nginx/segredos/viva-passo.htpasswd`, do VPS2). Os valores continuam só
+no cofre.
+
 Não é o mesmo inventário dos locais acima. Confirme os nomes contra a
 configuração da versão restaurada antes de cada ensaio.
 

@@ -28,6 +28,7 @@ from projetos import (
     PROJETOS,
     Projeto,
     por_slug,
+    registrar_descobertos,
 )
 from configuracao import ConfiguracaoInvalida, configurar_raiz_backup, configurar_vps, raiz_backup
 
@@ -153,9 +154,26 @@ def comando_configurar_raiz(args: argparse.Namespace) -> int:
 def comando_sincronizar_vps(args: argparse.Namespace) -> int:
     """Camada 2: busca, verifica e cataloga os dumps que o servidor produziu
     sozinho (Camada 1). Nunca fala com um contêiner de projeto."""
-    alvos = [p for p in PROJETOS if p.ambiente == AMBIENTE_VPS] if args.todos else [por_slug(args.projeto)]
-
     falhas = 0
+    if args.todos:
+        # Sites e configuração entram sozinhos: o que o servidor mostra e o
+        # catálogo não conhece vira projeto antes do ciclo (ver `projetos.py`).
+        alvos = [p for p in PROJETOS if p.ambiente == AMBIENTE_VPS]
+        descoberta = vps.descobrir_projetos()
+        if descoberta.novos:
+            registrar_descobertos(descoberta.novos)
+            alvos += descoberta.novos
+            print("\nNovos no backup:")
+            for projeto in descoberta.novos:
+                print(f"   {projeto.nome}  [{projeto.slug}]")
+        for aviso in descoberta.avisos:
+            print(f"\nAVISO: {aviso}", file=sys.stderr)
+        for falha in descoberta.falhas:
+            falhas += 1
+            print(f"\nFALHOU a descoberta: {falha}", file=sys.stderr)
+    else:
+        alvos = [por_slug(args.projeto)]
+
     for projeto in alvos:
         print(f"\n== {projeto.nome} ==")
         try:

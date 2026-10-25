@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import subprocess
@@ -103,6 +104,54 @@ def _imprimir(texto: str) -> None:
     """
     codificacao = getattr(sys.stdout, "encoding", None) or "ascii"
     print(texto.encode(codificacao, "replace").decode(codificacao))
+
+
+# A janela da tarefa e o console do proprio Python, que some quando ele
+# termina: o resumo passava diante do usuario sem dar tempo de ler (pedido de
+# 25/10/2026). Esperar uma tecla nessa mesma janela deixaria a tarefa "em
+# execucao" enquanto ninguem a fechasse, e o Agendador PULA a execucao seguinte
+# de uma tarefa que ainda esta rodando. Por isso o resumo abre num PowerShell a
+# parte, com console proprio, e a tarefa termina normalmente.
+CREATE_NEW_CONSOLE = 0x00000010
+CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+
+
+def comando_janela_resumo(arquivo: Path) -> list[str]:
+    """Linha de comando do PowerShell que mostra o resumo e fica aberto.
+
+    `-EncodedCommand` (UTF-16LE em base64) evita qualquer problema de aspas
+    com o caminho do arquivo."""
+    caminho = str(arquivo).replace("'", "''")
+    script = (
+        "[Console]::OutputEncoding = [Text.Encoding]::UTF8\n"
+        "$Host.UI.RawUI.WindowTitle = 'BackupRestore - resultado do backup'\n"
+        f"$texto = Get-Content -Raw -Encoding UTF8 -LiteralPath '{caminho}'\n"
+        "$cor = if ($texto -match 'RESULTADO \\.: OK') { 'Green' } else { 'Yellow' }\n"
+        "Write-Host $texto -ForegroundColor $cor\n"
+        "Write-Host 'Pode fechar esta janela quando terminar de ler.'\n"
+    )
+    codificado = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    return ["powershell.exe", "-NoProfile", "-NoExit", "-ExecutionPolicy", "Bypass",
+            "-EncodedCommand", codificado]
+
+
+def abrir_janela_resumo(
+    arquivo: Path, abrir: Callable[..., object] = subprocess.Popen
+) -> None:
+    """Abre o resumo numa janela que so fecha quando o usuario fechar.
+
+    Falhar aqui nunca derruba a rodada: o backup ja aconteceu e o resumo ja
+    esta gravado em `ultima-execucao.txt`."""
+    comando = comando_janela_resumo(arquivo)
+    try:
+        abrir(comando, creationflags=CREATE_NEW_CONSOLE | CREATE_BREAKAWAY_FROM_JOB)
+    except OSError:
+        # O job do Agendador pode nao permitir sair dele; a janela abre mesmo
+        # assim, presa ao job (que nao a encerra quando a tarefa termina).
+        try:
+            abrir(comando, creationflags=CREATE_NEW_CONSOLE)
+        except OSError as erro:
+            print(f"Nao foi possivel abrir a janela do resumo: {erro}", file=sys.stderr)
 
 
 def _operacoes(quantidade: int) -> str:
@@ -209,9 +258,14 @@ def main(
     executar: Callable[[Sequence[str]], int] | None = None,
     arquivo_resumo: Path = ARQUIVO_RESUMO,
     catalogo: Any = banco,
+    mostrar_janela: Callable[[Path], None] = abrir_janela_resumo,
 ) -> int:
     analisador = argparse.ArgumentParser(description=__doc__)
     analisador.add_argument("--inicializar", action="store_true")
+    analisador.add_argument(
+        "--janela", action="store_true",
+        help="no fim, abre o resumo numa janela que fica ate ser fechada (usado pela tarefa)",
+    )
     args = analisador.parse_args(argv)
 
     agora = obter_agora()
@@ -246,6 +300,8 @@ def main(
     )
     _gravar_texto(arquivo_resumo, resumo)
     _imprimir(resumo)
+    if args.janela:
+        mostrar_janela(arquivo_resumo)
 
     return 0 if codigo_vps == 0 and (codigo_local or 0) == 0 else 1
 

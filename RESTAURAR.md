@@ -163,6 +163,23 @@ o valor atual na tela do add-on.
 
 ---
 
+## Sites e configuração de um servidor
+
+Os projetos `site_<pasta>_vps` / `_vps2` e `configuracao_servidor_vps` /
+`_vps2` guardam em `volume\` um `.tar.gz` comum, sem banco e sem chave mestra:
+
+1. Confira o SHA-256 com o `.manifest.json` ao lado (ou `cli.py verificar`).
+2. Extraia numa pasta vazia: `tar -xzf <arquivo>.tar.gz -C <pasta>`.
+3. **Site:** o conteúdo é a pasta que o nginx servia (o caminho está no
+   `INVENTARIO.txt` da configuração). Copie de volta para esse caminho no
+   servidor. Os segredos (`.env*`, `.secrets/`, `*.key`, `*.pem`) não vêm: o
+   inventário lista os nomes, e os valores estão no cofre.
+4. **Configuração:** a árvore abre como `/` (`etc/nginx/...`,
+   `etc/systemd/system/...`). Comece pelo `INVENTARIO.txt`, que tem o roteiro
+   de reconstrução da máquina, e copie cada arquivo para o mesmo caminho,
+   conferindo antes de sobrescrever. Certificados se emitem de novo com o
+   certbot; os arquivos de `segredos/` vêm do cofre.
+
 ## Conferir um artefato antes de confiar nele
 
 O host não tem `pg_restore` — e não precisa ter. Qualquer contêiner
@@ -234,8 +251,10 @@ origem do dump.
   cópia independente descrita no kit.
 - **Segredos do VPS.** Nunca entram em artefato nenhum — cópia manual para o
   cofre, sempre (ver a seção "VPS (produção)" do kit).
-- **Código dos projetos `_vps`.** Não é backup deste sistema; é o `main` do
-  GitHub, imposto pelo `deploy.sh` do servidor.
+- **Código dos projetos `_vps`.** A fonte é o `main` do GitHub, imposto pelo
+  `deploy.sh` do servidor. Desde 25/10/2026 há também uma cópia da pasta
+  publicada de cada aplicação (`site_*`), que cobre o que estiver no servidor
+  e não no Git.
 - **Ponto no tempo do VPS.** Um dump é uma fotografia do momento em que o
   servidor o produziu (ver o `.manifest.json`), não um estado contínuo — não
   há arquivamento de WAL para voltar a um instante específico entre dois

@@ -56,11 +56,21 @@ a regra 3 deste lado: se algum dump da rodada reprovou, a limpeza é suspensa,
 porque reduzir o acervo numa rodada em que a captura falhou seria apagar sem
 ter o substituto.
 
-Hoje há um servidor só: o principal, com os quatro aplicativos e o Wealthfolio.
-O portal saiu do VPS dedicado e `mp_portal_vps` deixou o catálogo em 19/10/2026
-(os dumps já catalogados ficam no disco). O mecanismo de vários servidores
-continua: o campo `servidor` de cada projeto em `projetos.py` diz de qual deles
-o dump vem. Configure cada alvo uma vez:
+São dois servidores: o principal (VPS1, os quatro aplicativos e o Wealthfolio)
+e o `vps2` (sites estáticos). O portal saiu do VPS2 e `mp_portal_vps` deixou o
+catálogo em 19/10/2026 (os dumps já catalogados ficam no disco). O campo
+`servidor` de cada projeto em `projetos.py` diz de qual deles o artefato vem.
+
+**Sites e configuração entram sozinhos (desde 25/10/2026).** O `backup-db.sh`
+de cada servidor copia tudo o que o nginx publica (`site_<pasta>`) e a
+configuração da máquina (`configuracao_servidor`, com um `INVENTARIO.txt` que
+diz domínio, pasta, repositório, commit e segredos de cada site, e um roteiro de
+reconstrução), só quando algo muda. O `sincronizar-vps --todos` pergunta a cada
+servidor configurado quais pastas ele tem e registra as novas em
+`projetos-descobertos.local.json` (local, fora do Git) antes de buscar: um site
+novo aparece como "Site <nome> (VPS2)" sem ninguém editar `projetos.py`. Só
+cópias de arquivos entram sozinhas; banco novo é avisado e cadastrado à mão em
+`PROJETOS_FIXOS`. Configure cada alvo uma vez:
 
 ```powershell
 & .\.venv\Scripts\python.exe cli.py configurar-vps <host> --usuario ubuntu --chave 'C:\caminho\da\chave-dedicada'
@@ -274,6 +284,12 @@ faz o backup local pendente depois da sincronização do VPS.
 Habilite a opção **Executar a tarefa assim que possível após perder um início
 agendado** e mantenha a política de instâncias como **Não iniciar uma nova
 instância**. Isso elimina concorrência pelo catálogo e pelos recursos Docker.
+
+Passe `--janela` nos argumentos da tarefa (`"...\agendamento.py" --janela`):
+no fim, o resumo abre numa janela do PowerShell à parte, verde quando deu tudo
+certo e amarela quando algo falhou, que fica aberta até ser fechada. A janela
+é outro processo de propósito: esperar uma tecla na janela da própria tarefa a
+deixaria "em execução" e o Agendador pularia a rodada do dia seguinte.
 
 ### Como saber se a execução agendada falhou
 
