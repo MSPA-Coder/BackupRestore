@@ -11,17 +11,38 @@ Roda no host com Python 3.15 e Flask no `.venv`. Não é
 containerizado de propósito: é a ferramenta que gerencia os contêineres dos
 outros projetos, e colocá-la dentro de um exigiria montar o socket do Docker.
 
-A versão testada não é um congelamento: a compatibilidade mínima e a atualização
-do runtime serão declaradas de forma reproduzível, e cada evolução precisa passar
-por verificação dos artefatos e ensaio de restauração.
+## Ambiente oficial
+
+| Atividade | Ambiente |
+| --- | --- |
+| Interface, CLI e Agendador de Tarefas | `.venv` local com Python 3.15 |
+| Testes, auditoria e sandbox de restauração | Docker Compose |
+
+A compatibilidade mínima fica declarada em `requirements.txt`; a resolução
+exata validada (incluindo hashes) fica em `requirements.lock`. Assim, uma
+instalação reproduz a versão testada em vez de aceitar silenciosamente uma
+atualização nova dentro da faixa. Atualizações continuam deliberadas: altere a
+faixa quando necessário, regenere o lock e valide os artefatos e o ensaio de
+restauração.
 
 **Dependência única: Flask.** Todo o resto é biblioteca padrão. A faixa
-compatível está em `requirements.txt`; prepare o runtime explicitamente com:
+compatível está em `requirements.txt` e o lock instalado está em
+`requirements.lock`; prepare o runtime explicitamente com:
 
 ```powershell
 uv venv --python 3.15 .venv
-uv pip install --python .venv\Scripts\python.exe -r requirements.txt
+uv pip install --python .venv\Scripts\python.exe --require-hashes -r requirements.lock
 ```
+
+Para atualizar deliberadamente a resolução, com Python 3.15 e sem mudar a
+faixa de compatibilidade por acidente:
+
+```powershell
+uv pip compile --generate-hashes --universal --python-version 3.15 requirements.txt --output-file requirements.lock
+```
+
+Revise o diff, sincronize a `.venv` pelo comando acima e execute a verificação
+Docker e o ensaio aplicáveis antes de aceitar o novo lock.
 
 ---
 
@@ -259,8 +280,8 @@ ao concluir remove somente os dois bancos que acabou de criar no sandbox.
 
 O workflow em GitHub Actions roda em push para `main`, em pull requests para
 qualquer branch de destino, por disparo manual e semanalmente. Ele testa Python
-3.15, instala `requirements.txt` na imagem Docker Python 3.15, executa os testes
-unitários, compila as fontes e audita as dependências instaladas. Também analisa
+3.15, instala `requirements.lock` com hashes na imagem Docker Python 3.15,
+executa os testes unitários, compila as fontes e audita as dependências instaladas. Também analisa
 as imagens PostgreSQL do sandbox e quality com Trivy, reprovando CVEs corrigíveis
 de severidade HIGH ou CRITICAL. Não roda `verificar` ou `ensaio`, pois esses
 comandos dependem dos artefatos e do sandbox locais. Depois de cada push, a CI

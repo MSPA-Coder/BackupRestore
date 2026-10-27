@@ -5,13 +5,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /workspace
-COPY requirements.txt /tmp/requirements.txt
+COPY requirements.lock /tmp/requirements.lock
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --no-cache-dir --require-hashes \
+      -r /tmp/requirements.lock \
     && python -m pip install --no-cache-dir \
-      -r /tmp/requirements.txt \
       'pip-audit>=2.10,<3' \
     && python -m pip install --no-cache-dir --upgrade pip setuptools msgpack urllib3
 
