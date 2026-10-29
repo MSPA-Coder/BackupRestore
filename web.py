@@ -26,6 +26,7 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, url
 import banco
 import motor
 import restaurar as restauracao
+import travas
 from configuracao import raiz_backup, raiz_permitida, servidores_vps
 from projetos import (
     AMBIENTE_LOCAL,
@@ -338,10 +339,11 @@ def disparar_backup(slug: str):
 
 @app.post("/artefato/<int:artefato_id>/fixar")
 def fixar(artefato_id: int):
-    artefato = banco.obter_artefato(artefato_id)
-    if artefato is None:
-        abort(404)
-    banco.fixar_artefato(artefato_id, not artefato["fixado"])
+    with travas.catalogo_exclusivo():
+        artefato = banco.obter_artefato(artefato_id)
+        if artefato is None:
+            abort(404)
+        banco.fixar_artefato(artefato_id, not artefato["fixado"])
     return redirect(url_for("projeto", slug=artefato["projeto"], tipo=artefato["tipo"]))
 
 

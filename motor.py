@@ -41,6 +41,7 @@ import subprocess
 import tarfile
 import threading
 import time
+import uuid
 import zipfile
 import zlib
 from concurrent.futures import ThreadPoolExecutor
@@ -48,6 +49,7 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 
 import banco
+import travas
 from configuracao import (
     ConfiguracaoInvalida,
     caminho_catalogo,
@@ -383,17 +385,34 @@ def aplicar_retencao(projeto: Projeto, tipo: str) -> int:
 
 
 def _promover(tmp: str, final: str, manifesto: dict) -> None:
-    """Regra 1: o arquivo só ganha o nome definitivo depois de verificado."""
-    os.replace(tmp, final)
-    with open(final + ".manifest.json", "w", encoding="utf-8") as arquivo:
-        json.dump(manifesto, arquivo, indent=2, ensure_ascii=False)
+    """Publica o manifesto completo antes do artefato já verificado.
+
+    Após interrupção, um artefato publicado sempre tem manifesto para a
+    reconstrução; um manifesto sem artefato não é catalogado.
+    """
+    caminho_manifesto = final + ".manifest.json"
+    # Uma queda abrupta pode deixar um temporário anterior para o mesmo dump
+    # remoto; cada tentativa usa seu próprio nome e não fica bloqueada por ele.
+    temporario_manifesto = caminho_manifesto + "." + uuid.uuid4().hex + ".tmp"
+    try:
+        with open(temporario_manifesto, "x", encoding="utf-8") as arquivo:
+            json.dump(manifesto, arquivo, indent=2, ensure_ascii=False)
+            arquivo.flush()
+            os.fsync(arquivo.fileno())
+        os.replace(temporario_manifesto, caminho_manifesto)
+        os.replace(tmp, final)
+    finally:
+        if os.path.exists(temporario_manifesto):
+            os.remove(temporario_manifesto)
 
 
 def _produzir(projeto: Projeto, tipo: str, execucao_id: int | None) -> Resultado:
     inicio = time.monotonic()
     carimbo = _carimbo()
     extensao = {"banco": "dump", "codigo": "zip"}[tipo]
-    nome = f"{projeto.slug}_{tipo}_{carimbo}.{extensao}"
+    # O carimbo tem resolução de segundos; duas execuções no mesmo segundo
+    # precisam de caminhos distintos tanto no temporário quanto no destino.
+    nome = f"{projeto.slug}_{tipo}_{carimbo}_{uuid.uuid4().hex}.{extensao}"
     _pasta_temp()
     _pasta_destino(projeto, tipo)
     tmp = caminho_sob_raiz("temp", nome + ".tmp")
@@ -437,6 +456,28 @@ def _produzir(projeto: Projeto, tipo: str, execucao_id: int | None) -> Resultado
 
 
 def fazer_backup(
+    projeto: Projeto,
+    tipos: tuple[str, ...] | None = None,
+    execucao_id: int | None = None,
+) -> list[Resultado]:
+    """Serializa ciclos sobre o mesmo contêiner entre threads e processos."""
+    if projeto.ambiente != "local":
+        # A recusa não toca o contêiner local que por acaso tem o mesmo nome.
+        return _fazer_backup_exclusivo(projeto, tipos, execucao_id)
+    try:
+        with travas.catalogo_exclusivo(), travas.container_exclusivo(projeto.container):
+            return _fazer_backup_exclusivo(projeto, tipos, execucao_id)
+    except Exception as erro:
+        # A interface cria o pedido antes de iniciar a thread. Se a trava não
+        # puder ser aberta, não deixar esse pedido eternamente na fila.
+        if execucao_id is not None:
+            execucao = banco.obter_execucao(execucao_id)
+            if execucao is not None and execucao["situacao"] == "fila":
+                banco.fechar_execucao(execucao_id, "falha", str(erro))
+        raise
+
+
+def _fazer_backup_exclusivo(
     projeto: Projeto,
     tipos: tuple[str, ...] | None = None,
     execucao_id: int | None = None,
@@ -519,14 +560,6 @@ def fazer_backup(
                     projeto=projeto.slug, execucao_id=execucao_id,
                 )
 
-        banco.fechar_execucao(execucao_id, "sucesso")
-        banco.registrar_evento(
-            "backup.sucesso",
-            f"{len(resultados)} artefato(s): " + ", ".join(r.tipo for r in resultados),
-            projeto=projeto.slug, execucao_id=execucao_id,
-        )
-        return resultados
-
     except Exception as erro:
         banco.fechar_execucao(execucao_id, "falha", str(erro))
         banco.registrar_evento("backup.falha", str(erro), projeto=projeto.slug,
@@ -535,10 +568,33 @@ def fazer_backup(
     finally:
         # Regra 4.
         if precisa_banco and existe and not estava_rodando:
-            _rodar(["docker", "stop", projeto.container], tempo_limite=120)
+            try:
+                parado = _rodar(["docker", "stop", projeto.container], tempo_limite=120)
+                if parado.returncode != 0:
+                    raise FalhaDeBackup(f"não foi possível parar {projeto.container}: {_erro(parado)}")
+            except Exception as erro:
+                mensagem = f"Não foi possível restaurar o estado original do contêiner {projeto.container}: {erro}"
+                banco.fechar_execucao(execucao_id, "falha", mensagem)
+                banco.registrar_evento("backup.falha", mensagem, projeto=projeto.slug,
+                                       execucao_id=execucao_id, severidade="erro")
+                raise FalhaDeBackup(mensagem) from erro
+
+    banco.fechar_execucao(execucao_id, "sucesso")
+    banco.registrar_evento(
+        "backup.sucesso",
+        f"{len(resultados)} artefato(s): " + ", ".join(r.tipo for r in resultados),
+        projeto=projeto.slug, execucao_id=execucao_id,
+    )
+    return resultados
 
 
 def verificar(projeto_slug: str | None = None) -> dict[str, int]:
+    """Confere o acervo sem concorrer com retenção ou restauração."""
+    with travas.catalogo_exclusivo():
+        return _verificar_exclusivo(projeto_slug)
+
+
+def _verificar_exclusivo(projeto_slug: str | None = None) -> dict[str, int]:
     """Regra 7: relê os arquivos e confere contra o SHA-256 do catálogo.
     É o que detecta corrupção silenciosa no destino.
 

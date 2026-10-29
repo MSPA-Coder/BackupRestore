@@ -6,13 +6,17 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import banco
 import configuracao
 import motor
+import reconstruir
 import restaurar
 import cli
 import web
@@ -101,6 +105,222 @@ class FluxoBackupTests(unittest.TestCase):
         self.assertEqual(banco.listar_execucoes()[0]["situacao"], "falha")
         self.assertEqual(list(self.raiz.rglob("*.tmp")), [])
         self.assertEqual(list(self.raiz.rglob("*.dump")), [])
+
+    def test_falha_ao_restaurar_estado_do_container_nao_informa_sucesso(self):
+        self.rodando = False
+        docker_original = self.docker
+
+        def docker_com_falha(comando, **opcoes):
+            if comando[1] == "stop":
+                return subprocess.CompletedProcess(comando, 1, b"", b"falha ao parar")
+            return docker_original(comando, **opcoes)
+
+        with patch("subprocess.run", side_effect=docker_com_falha):
+            with self.assertRaises(motor.FalhaDeBackup):
+                motor.fazer_backup(LOCAL, tipos=("banco",))
+        self.assertEqual(banco.listar_execucoes()[0]["situacao"], "falha")
+        self.assertFalse(any(e["tipo"] == "backup.sucesso" for e in banco.listar_eventos()))
+
+    def test_comparacao_recusa_sucesso_se_nao_consegue_parar_a_origem(self):
+        self.rodando = False
+        docker_original = self.docker
+
+        def docker_com_falha(comando, **opcoes):
+            if comando[1] == "stop":
+                return subprocess.CompletedProcess(comando, 1, b"", b"falha ao parar")
+            return docker_original(comando, **opcoes)
+
+        with patch("subprocess.run", side_effect=docker_com_falha):
+            with self.assertRaisesRegex(RuntimeError, "estado original"):
+                restaurar.comparar_com_origem(LOCAL, CONTAINER_SANDBOX, "sandbox", "sandbox")
+
+    def test_interrupcao_apos_publicacao_permite_recuperar_catalogo(self):
+        substituir = os.replace
+
+        def interromper(origem, destino):
+            substituir(origem, destino)
+            if str(destino).endswith(".dump"):
+                raise KeyboardInterrupt("processo interrompido após publicação")
+
+        with patch("os.replace", side_effect=interromper):
+            with self.assertRaises(KeyboardInterrupt):
+                motor.fazer_backup(LOCAL, tipos=("banco",))
+        self.assertEqual(banco.listar_artefatos(LOCAL.slug), [])
+        with patch.object(motor, "_sandbox_disponivel", return_value=True):
+            relatorio = reconstruir.reconstruir(aplicar=True, projeto_slug=LOCAL.slug)
+        self.assertTrue(relatorio.limpo)
+        self.assertEqual(len(banco.artefatos_validos(LOCAL.slug, "banco")), 1)
+
+    def test_interrupcao_antes_do_artefato_nao_cataloga_manifesto_isolado(self):
+        anterior = motor.fazer_backup(replace(LOCAL, retencao=1), tipos=("banco",))[0]
+        substituir = os.replace
+
+        def interromper(origem, destino):
+            substituir(origem, destino)
+            if str(destino).endswith(".manifest.json"):
+                raise KeyboardInterrupt("processo interrompido antes da publicação")
+
+        with patch("os.replace", side_effect=interromper):
+            with self.assertRaises(KeyboardInterrupt):
+                motor.fazer_backup(replace(LOCAL, retencao=1), tipos=("banco",))
+        self.assertTrue(Path(anterior.caminho).is_file())
+        self.assertEqual(len(banco.artefatos_validos(LOCAL.slug, "banco")), 1)
+        with patch.object(motor, "_sandbox_disponivel", return_value=True):
+            relatorio = reconstruir.reconstruir(aplicar=True, projeto_slug=LOCAL.slug)
+        self.assertTrue(relatorio.limpo)
+        self.assertEqual(len(banco.artefatos_validos(LOCAL.slug, "banco")), 1)
+
+    def test_backups_no_mesmo_segundo_preservam_ambos_os_artefatos(self):
+        with patch.object(motor, "_carimbo", return_value="20261028_120000"):
+            primeiro = motor.fazer_backup(LOCAL, tipos=("banco",))[0]
+            segundo = motor.fazer_backup(LOCAL, tipos=("banco",))[0]
+
+        self.assertNotEqual(primeiro.caminho, segundo.caminho)
+        artefatos = banco.artefatos_validos(LOCAL.slug, "banco")
+        self.assertEqual(len(artefatos), 2)
+        for artefato in artefatos:
+            caminho = self.raiz / artefato["caminho_relativo"]
+            self.assertEqual(hashlib.sha256(caminho.read_bytes()).hexdigest(), artefato["sha256"])
+            self.assertTrue(Path(str(caminho) + ".manifest.json").is_file())
+
+    def test_dois_backups_do_mesmo_container_nao_interrompem_um_ao_outro(self):
+        self.rodando = False
+        primeiro_dump = threading.Event()
+        liberar_primeiro = threading.Event()
+        segundo_dump = threading.Event()
+        resultados = []
+
+        def docker(comando, **opcoes):
+            if "pg_dump" in comando:
+                if threading.current_thread().name == "primeiro":
+                    primeiro_dump.set()
+                    if not liberar_primeiro.wait(10):
+                        raise AssertionError("primeiro backup não foi liberado")
+                else:
+                    segundo_dump.set()
+                if not self.rodando:
+                    return subprocess.CompletedProcess(comando, 1, b"", b"container parado")
+            return self.docker(comando, **opcoes)
+
+        def executar():
+            try:
+                motor.fazer_backup(LOCAL, tipos=("banco",))
+                resultados.append("sucesso")
+            except Exception as erro:
+                resultados.append(str(erro))
+
+        with patch("subprocess.run", side_effect=docker):
+            primeiro = threading.Thread(target=executar, name="primeiro")
+            segundo = threading.Thread(target=executar, name="segundo")
+            primeiro.start()
+            self.assertTrue(primeiro_dump.wait(10))
+            segundo.start()
+            try:
+                self.assertFalse(segundo_dump.wait(0.2), "o segundo não deve iniciar o dump antes do primeiro terminar")
+            finally:
+                liberar_primeiro.set()
+                primeiro.join(10)
+                segundo.join(10)
+        self.assertFalse(primeiro.is_alive() or segundo.is_alive())
+        self.assertEqual(resultados, ["sucesso", "sucesso"])
+        self.assertFalse(self.rodando)
+        self.assertEqual(len(banco.artefatos_validos(LOCAL.slug, "banco")), 2)
+
+    def test_retencao_espera_restauracao_terminar_de_ler_o_dump(self):
+        projeto = replace(LOCAL, retencao=1)
+        primeiro = motor.fazer_backup(projeto, tipos=("banco",))[0]
+        artefato = banco.listar_artefatos(projeto.slug)[0]
+        restaurando = threading.Event()
+        liberar_restore = threading.Event()
+        segundo_dump = threading.Event()
+        resultados = []
+
+        def docker(comando, **opcoes):
+            if "pg_restore" in comando and "--exit-on-error" in comando:
+                restaurando.set()
+                if not liberar_restore.wait(10):
+                    raise AssertionError("restauração não foi liberada")
+            if "pg_dump" in comando and threading.current_thread().name == "backup-segundo":
+                segundo_dump.set()
+            return self.docker(comando, **opcoes)
+
+        def restaurar_dump():
+            try:
+                restaurar.restaurar(
+                    artefato["id"], container_destino=CONTAINER_SANDBOX,
+                    banco_destino="ensaio", usuario_destino="sandbox", confirmacao="ensaio",
+                )
+                resultados.append("restaurado")
+            except Exception as erro:
+                resultados.append(str(erro))
+
+        def fazer_segundo_backup():
+            try:
+                motor.fazer_backup(projeto, tipos=("banco",))
+                resultados.append("backup")
+            except Exception as erro:
+                resultados.append(str(erro))
+
+        with patch("subprocess.run", side_effect=docker):
+            leitura = threading.Thread(target=restaurar_dump)
+            backup = threading.Thread(target=fazer_segundo_backup, name="backup-segundo")
+            leitura.start()
+            self.assertTrue(restaurando.wait(10))
+            backup.start()
+            try:
+                self.assertFalse(segundo_dump.wait(0.2))
+                self.assertTrue(Path(primeiro.caminho).exists())
+            finally:
+                liberar_restore.set()
+                leitura.join(10)
+                backup.join(10)
+        self.assertFalse(leitura.is_alive() or backup.is_alive())
+        self.assertCountEqual(resultados, ["restaurado", "backup"])
+        self.assertFalse(Path(primeiro.caminho).exists())
+        self.assertEqual(len(banco.artefatos_validos(projeto.slug, "banco")), 1)
+
+    def test_troca_de_raiz_aguarda_backup_e_preserva_vinculo_do_catalogo(self):
+        iniciando_dump = threading.Event()
+        liberar_dump = threading.Event()
+        configuracao_concluida = threading.Event()
+        resultados = []
+
+        def docker(comando, **opcoes):
+            if "pg_dump" in comando:
+                iniciando_dump.set()
+                if not liberar_dump.wait(10):
+                    raise AssertionError("backup não foi liberado")
+            return self.docker(comando, **opcoes)
+
+        def backup():
+            try:
+                motor.fazer_backup(LOCAL, tipos=("banco",))
+                resultados.append("backup")
+            except Exception as erro:
+                resultados.append(str(erro))
+
+        def trocar_raiz():
+            try:
+                nova = str(self.raiz.parent / "outra-raiz")
+                resultados.append(cli.comando_configurar_raiz(SimpleNamespace(caminho=nova, permitida=nova)))
+            finally:
+                configuracao_concluida.set()
+
+        with patch("subprocess.run", side_effect=docker):
+            primeiro = threading.Thread(target=backup)
+            segundo = threading.Thread(target=trocar_raiz)
+            primeiro.start()
+            self.assertTrue(iniciando_dump.wait(10))
+            segundo.start()
+            try:
+                self.assertFalse(configuracao_concluida.wait(0.2))
+            finally:
+                liberar_dump.set()
+                primeiro.join(10)
+                segundo.join(10)
+        self.assertFalse(primeiro.is_alive() or segundo.is_alive())
+        self.assertCountEqual(resultados, ["backup", 2])
+        self.assertEqual(len(banco.artefatos_validos(LOCAL.slug, "banco")), 1)
 
     def test_timeout_de_prontidao_tambem_devolve_container_parado(self):
         self.rodando = False

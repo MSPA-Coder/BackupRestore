@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 
 import banco
 import motor
+import travas
 from configuracao import SERVIDOR_PRINCIPAL, alvo_vps, caminho_sob_raiz, servidores_vps
 from projetos import AMBIENTE_VPS, CONTAINER_SANDBOX, PROJETOS, Projeto, projeto_descoberto
 
@@ -357,6 +358,21 @@ def _criado_em_do_carimbo(carimbo: str) -> str:
 
 
 def sincronizar_projeto(projeto: Projeto, execucao_id: int | None = None) -> ResultadoSincronizacao:
+    """Sincroniza o projeto sem concorrer com alterações do acervo."""
+    if projeto.ambiente != AMBIENTE_VPS:
+        return _sincronizar_exclusivo(projeto, execucao_id)
+    try:
+        with travas.catalogo_exclusivo():
+            return _sincronizar_exclusivo(projeto, execucao_id)
+    except Exception as erro:
+        if execucao_id is not None:
+            execucao = banco.obter_execucao(execucao_id)
+            if execucao is not None and execucao["situacao"] == "fila":
+                banco.fechar_execucao(execucao_id, "falha", str(erro))
+        raise
+
+
+def _sincronizar_exclusivo(projeto: Projeto, execucao_id: int | None = None) -> ResultadoSincronizacao:
     """O ciclo da Camada 2 para um projeto: busca o que falta, verifica,
     cataloga e só então pede a limpeza no servidor."""
     proprio = execucao_id is None
@@ -393,6 +409,30 @@ def sincronizar_projeto(projeto: Projeto, execucao_id: int | None = None) -> Res
 
             final = caminho_sob_raiz("projects", projeto.slug, dump.tipo, dump.arquivo)
             if os.path.exists(final):
+                relativo = motor._relativo(final)
+                registro = next(
+                    (item for item in banco.artefatos_validos(projeto.slug, dump.tipo)
+                     if item["caminho_relativo"] == relativo),
+                    None,
+                )
+                try:
+                    confirmado = (
+                        registro is not None and not os.path.islink(final)
+                        and os.path.isfile(final) and registro["sha256"] == dump.sha256
+                        and registro["bytes"] == dump.bytes == os.path.getsize(final)
+                        and motor.sha256_arquivo(final) == dump.sha256
+                    )
+                except OSError:
+                    confirmado = False
+                if not confirmado:
+                    resultado.reprovados += 1
+                    banco.registrar_evento(
+                        "sincronizacao.reprovado",
+                        f"{dump.arquivo}: cópia local não conferida no catálogo ou divergente; "
+                        "nenhuma remoção remota foi solicitada. Verifique ou reconstrua o catálogo.",
+                        projeto=projeto.slug, execucao_id=execucao_id, severidade="erro",
+                    )
+                    continue
                 resultado.ja_existentes += 1
             elif not _buscar_e_catalogar(projeto, alvo, dump, execucao_id):
                 resultado.reprovados += 1

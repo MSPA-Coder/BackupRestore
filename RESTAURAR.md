@@ -27,6 +27,8 @@ padrão portátil irmão de `VSCodeProjects`. A interface web apenas exibe o
 destino efetivo; não pode alterá-lo.
 
 Cada artefato tem um `.manifest.json` ao lado com SHA-256, tamanho e origem.
+Os backups locais novos incluem um identificador único após a data no nome;
+nomes antigos continuam válidos para leitura e reconstrução do catálogo.
 Os `<projeto>` locais são `conforto_termico`, `mega_sena`, `controle_bancario`
 e `controle_renda_variavel`.
 

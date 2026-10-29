@@ -343,6 +343,17 @@ class BuscarCopiaDeVolumeTests(unittest.TestCase):
         self.assertEqual(registrar.call_args.kwargs["tipo"], "volume")
         self.assertEqual(registrar.call_args.kwargs["projeto"], WEALTHFOLIO.slug)
 
+    def test_nova_tentativa_ignora_manifesto_temporario_de_queda_anterior(self) -> None:
+        with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
+            pasta = Path(diretorio, "backups", "projects", WEALTHFOLIO.slug, "volume")
+            pasta.mkdir(parents=True)
+            sobra = pasta / (NOME_COPIA + ".manifest.json.tmp")
+            sobra.write_text("manifesto interrompido", encoding="utf-8")
+            ok, final, _registrar, _evento = self._buscar(diretorio, COPIA_BOA)
+            self.assertTrue(ok)
+            self.assertTrue(final.is_file())
+            self.assertTrue(sobra.is_file())
+
     def test_copia_que_nao_se_le_ate_o_fim_nao_entra(self) -> None:
         cortada = COPIA_BOA[: len(COPIA_BOA) // 2]
         with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
@@ -356,6 +367,11 @@ class BuscarCopiaDeVolumeTests(unittest.TestCase):
 
 class SincronizarProjetoTests(unittest.TestCase):
     def setUp(self) -> None:
+        pasta = tempfile.TemporaryDirectory()
+        self.addCleanup(pasta.cleanup)
+        controle = patch.object(banco, "CAMINHO_CATALOGO", str(Path(pasta.name) / "catalogo.sqlite3"))
+        controle.start()
+        self.addCleanup(controle.stop)
         # Estes testes simulam o catálogo função a função. A retenção real leria
         # (e poderia alterar) o `catalogo.sqlite3` deste PC, ou falharia onde
         # ele não existe (CI); ela é coberta em RetencaoNaSincronizacaoTests.
@@ -419,7 +435,9 @@ class SincronizarProjetoTests(unittest.TestCase):
 
     def test_dump_ja_existente_pula_busca_mas_tenta_apagar(self) -> None:
         nome = f"{PROJETO_VPS.slug_servidor}_banco_20260819_000000.dump"
-        linha = f"{PROJETO_VPS.slug_servidor}/{nome} 10 " + "a" * 64
+        conteudo = b"ja-esta-aqui"
+        digest = hashlib.sha256(conteudo).hexdigest()
+        linha = f"{PROJETO_VPS.slug_servidor}/{nome} {len(conteudo)} {digest}"
         listar_proc = subprocess.CompletedProcess(
             args=[], returncode=0, stdout=(linha + "\n").encode(), stderr=b""
         )
@@ -438,7 +456,11 @@ class SincronizarProjetoTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
             caminho = configuracao.caminho_sob_raiz("projects", PROJETO_VPS.slug, "banco", nome)
             os.makedirs(os.path.dirname(caminho), exist_ok=True)
-            Path(caminho).write_bytes(b"ja-esta-aqui")
+            Path(caminho).write_bytes(conteudo)
+            banco.criar_tabelas()
+            banco.registrar_artefato(projeto=PROJETO_VPS.slug, tipo="banco",
+                caminho_relativo=motor._relativo(caminho), bytes_=len(conteudo),
+                sha256=digest, duracao_ms=1, execucao_id=None)
 
             with (
                 patch.object(vps, "_ssh", side_effect=_ssh_fake),
@@ -455,14 +477,41 @@ class SincronizarProjetoTests(unittest.TestCase):
         self.assertEqual(resultado.mantidos, 1)
         fechar.assert_called_once_with(1, "sucesso")
 
+    def test_copia_existente_sem_catalogo_ou_adulterada_nao_libera_apagar_remoto(self) -> None:
+        nome = f"{PROJETO_VPS.slug_servidor}_banco_20260819_000000.dump"
+        conteudo = b"dump original"
+        digest = hashlib.sha256(conteudo).hexdigest()
+        dump = vps.DumpRemoto(PROJETO_VPS.slug_servidor, nome,
+            f"{PROJETO_VPS.slug_servidor}/{nome}", len(conteudo), digest, "20260819_000000")
+        with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
+            caminho = Path(configuracao.caminho_sob_raiz("projects", PROJETO_VPS.slug, "banco", nome))
+            caminho.parent.mkdir(parents=True)
+            caminho.write_bytes(conteudo)
+            banco.criar_tabelas()
+            with (
+                patch.object(vps, "listar_remoto", return_value=[dump]),
+                patch.object(vps, "_alvo_configurado", return_value=ALVO),
+                patch.object(vps, "_apagar_remoto") as apagar,
+            ):
+                self.assertEqual(vps.sincronizar_projeto(PROJETO_VPS).reprovados, 1)
+                apagar.assert_not_called()
+                banco.registrar_artefato(projeto=PROJETO_VPS.slug, tipo="banco",
+                    caminho_relativo=motor._relativo(str(caminho)), bytes_=len(conteudo),
+                    sha256=digest, duracao_ms=1, execucao_id=None)
+                caminho.write_bytes(b"dump alterado!")  # mesmo tamanho, hash diferente
+                self.assertEqual(vps.sincronizar_projeto(PROJETO_VPS).reprovados, 1)
+                apagar.assert_not_called()
+
     def test_apagar_que_nao_responde_nao_impede_os_dumps_seguintes(self) -> None:
         """A regressão que custou dados: a limpeza do servidor é higiene, a
         busca é a proteção. Uma falhando não pode levar a outra junto."""
         nomes = [
             f"{PROJETO_VPS.slug_servidor}_banco_2026081{n}_000000.dump" for n in (8, 9)
         ]
+        conteudo = b"ja-esta-aqui"
+        digest = hashlib.sha256(conteudo).hexdigest()
         linhas = "".join(
-            f"{PROJETO_VPS.slug_servidor}/{nome} 10 " + "a" * 64 + "\n" for nome in nomes
+            f"{PROJETO_VPS.slug_servidor}/{nome} {len(conteudo)} {digest}\n" for nome in nomes
         )
         listar_proc = subprocess.CompletedProcess(
             args=[], returncode=0, stdout=linhas.encode(), stderr=b""
@@ -485,8 +534,13 @@ class SincronizarProjetoTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as diretorio, _ambiente_raiz(diretorio):
             pasta_banco = Path(diretorio, "backups", "projects", PROJETO_VPS.slug, "banco")
             pasta_banco.mkdir(parents=True)
+            banco.criar_tabelas()
             for nome in nomes:
-                (pasta_banco / nome).write_bytes(b"ja-esta-aqui")
+                caminho = pasta_banco / nome
+                caminho.write_bytes(conteudo)
+                banco.registrar_artefato(projeto=PROJETO_VPS.slug, tipo="banco",
+                    caminho_relativo=motor._relativo(str(caminho)), bytes_=len(conteudo),
+                    sha256=digest, duracao_ms=1, execucao_id=None)
 
             with (
                 patch.object(vps, "_ssh", side_effect=_ssh_fake),
@@ -732,7 +786,7 @@ class RetencaoNaSincronizacaoTests(unittest.TestCase):
             banco.registrar_artefato(
                 projeto=PROJETO_VPS.slug, tipo="banco",
                 caminho_relativo=f"projects/{PROJETO_VPS.slug}/banco/{nome}",
-                bytes_=15, sha256="a" * 64, duracao_ms=1, execucao_id=None,
+                bytes_=15, sha256=hashlib.sha256(b"dump ja buscado").hexdigest(), duracao_ms=1, execucao_id=None,
                 criado_em=f"2026-09-{dia:02d}T00:00:00",
             )
             nomes.append(nome)
@@ -741,7 +795,7 @@ class RetencaoNaSincronizacaoTests(unittest.TestCase):
     def _sincronizar(self, nome_remoto: str, *, sem_hash: bool = False):
         """Um ciclo em que o único dump do servidor já existe aqui: nada é
         buscado, então o que sobrar do acervo é efeito só da retenção."""
-        sha = "sem-hash" if sem_hash else "a" * 64
+        sha = "sem-hash" if sem_hash else hashlib.sha256(b"dump ja buscado").hexdigest()
         linha = f"{PROJETO_VPS.slug_servidor}/{nome_remoto} 15 {sha}\n"
         listar_proc = subprocess.CompletedProcess(
             args=[], returncode=0, stdout=linha.encode(), stderr=b""

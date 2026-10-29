@@ -22,6 +22,7 @@ import time
 
 import banco
 import motor
+import travas
 from configuracao import caminho_sob_raiz
 from projetos import CONTAINER_SANDBOX, Projeto
 
@@ -165,6 +166,13 @@ def restaurar(
             f"confirmação não confere: digite exatamente {banco_destino!r}"
         )
 
+    with travas.catalogo_exclusivo():
+        return _restaurar_exclusivo(artefato_id, container_destino, banco_destino, usuario_destino)
+
+
+def _restaurar_exclusivo(artefato_id: int, container_destino: str, banco_destino: str,
+                         usuario_destino: str) -> dict:
+
     artefato = banco.obter_artefato(artefato_id)
     if artefato is None:
         raise RestauracaoRecusada(f"artefato {artefato_id} não existe no catálogo")
@@ -249,6 +257,14 @@ def restaurar(
 
 def comparar_com_origem(projeto: Projeto, container_destino: str, usuario_destino: str,
                         banco_destino: str) -> dict:
+    if projeto.ambiente != "local":
+        return _comparar_com_origem_exclusivo(projeto, container_destino, usuario_destino, banco_destino)
+    with travas.catalogo_exclusivo(), travas.container_exclusivo(projeto.container):
+        return _comparar_com_origem_exclusivo(projeto, container_destino, usuario_destino, banco_destino)
+
+
+def _comparar_com_origem_exclusivo(projeto: Projeto, container_destino: str, usuario_destino: str,
+                                   banco_destino: str) -> dict:
     """O ensaio: as mesmas tabelas, com as mesmas contagens, dos dois lados."""
     if projeto.ambiente != "local":
         # `projeto.container` é só um nome — para um projeto "vps" ele colide
@@ -268,12 +284,16 @@ def comparar_com_origem(projeto: Projeto, container_destino: str, usuario_destin
         )
     try:
         if not rodando:
-            motor._rodar(["docker", "start", projeto.container], tempo_limite=120)
+            iniciado = motor._rodar(["docker", "start", projeto.container], tempo_limite=120)
+            if iniciado.returncode != 0:
+                raise OrigemIndisponivel(f"não foi possível iniciar {projeto.container}: {motor._erro(iniciado)}")
             motor._esperar_postgres(projeto)
         origem = resumo_banco(projeto.container, projeto.usuario, projeto.banco)
     finally:
         if not rodando:
-            motor._rodar(["docker", "stop", projeto.container], tempo_limite=120)
+            parado = motor._rodar(["docker", "stop", projeto.container], tempo_limite=120)
+            if parado.returncode != 0:
+                raise RuntimeError(f"não foi possível restaurar o estado original de {projeto.container}: {motor._erro(parado)}")
 
     destino = resumo_banco(container_destino, usuario_destino, banco_destino)
     tabelas = sorted(set(origem) | set(destino))

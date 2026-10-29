@@ -46,6 +46,9 @@ class _CenarioDeVerificacao(unittest.TestCase):
     def setUp(self) -> None:
         self.diretorio = tempfile.TemporaryDirectory()
         self.addCleanup(self.diretorio.cleanup)
+        controle = patch.object(banco, "CAMINHO_CATALOGO", os.path.join(self.diretorio.name, "catalogo.sqlite3"))
+        controle.start()
+        self.addCleanup(controle.stop)
         self.arquivo = os.path.join(self.diretorio.name, "artefato.dump")
         with open(self.arquivo, "wb") as destino:
             destino.write(b"conteudo qualquer")

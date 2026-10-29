@@ -21,6 +21,7 @@ import banco
 import motor
 import reconstruir
 import restaurar as restauracao
+import travas
 import vps
 from projetos import (
     AMBIENTE_VPS,
@@ -128,6 +129,11 @@ def comando_reconstruir_catalogo(args: argparse.Namespace) -> int:
 
 def comando_configurar_raiz(args: argparse.Namespace) -> int:
     """Única via de escrita da configuração de destino: operador no host."""
+    with travas.catalogo_exclusivo():
+        return _configurar_raiz_exclusivo(args)
+
+
+def _configurar_raiz_exclusivo(args: argparse.Namespace) -> int:
     if banco.listar_artefatos(limite=1):
         try:
             atual = os.path.normcase(os.path.normpath(raiz_backup()))
@@ -201,6 +207,11 @@ def comando_sincronizar_vps(args: argparse.Namespace) -> int:
 
 def comando_configurar_vps(args: argparse.Namespace) -> int:
     """Única via de escrita do alvo SSH do VPS: operador no host."""
+    with travas.catalogo_exclusivo():
+        return _configurar_vps_exclusivo(args)
+
+
+def _configurar_vps_exclusivo(args: argparse.Namespace) -> int:
     try:
         alvo = configurar_vps(args.host, args.usuario, args.chave, args.servidor)
     except ConfiguracaoInvalida as erro:
@@ -287,6 +298,11 @@ def _ensaiar_todos() -> int:
 
 
 def _ensaiar(projeto: Projeto) -> int:
+    with travas.catalogo_exclusivo():
+        return _ensaiar_exclusivo(projeto)
+
+
+def _ensaiar_exclusivo(projeto: Projeto) -> int:
     dumps = banco.artefatos_validos(projeto.slug, "banco")
     if not dumps:
         print(f"Nenhum dump válido de {projeto.nome} no catálogo.", file=sys.stderr)

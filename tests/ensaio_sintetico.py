@@ -18,10 +18,83 @@ import banco  # noqa: E402
 import configuracao  # noqa: E402
 import motor  # noqa: E402
 import restaurar  # noqa: E402
+import travas  # noqa: E402
 from projetos import CONTAINER_SANDBOX, Projeto  # noqa: E402
 
 ORIGEM = "validacao_sintetica_origem"
 DESTINO = "validacao_sintetica_destino"
+
+
+def ensaiar_trava_no_host():
+    """Confere a exclusão do runtime real, inclusive Windows, sem tocar contêiner operacional."""
+    codigo = (
+        "import sys; import banco, travas; banco.CAMINHO_CATALOGO=sys.argv[1]; "
+        "print('pronto', flush=True); "
+        "\nwith travas.container_exclusivo(sys.argv[2]): print('adquiriu', flush=True)"
+    )
+    with travas.container_exclusivo(CONTAINER_SANDBOX):
+        processo = subprocess.Popen(
+            [sys.executable, "-c", codigo, banco.CAMINHO_CATALOGO, CONTAINER_SANDBOX],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            assert processo.stdout.readline().strip() == "pronto"
+            try:
+                processo.wait(timeout=0.3)
+            except subprocess.TimeoutExpired:
+                pass
+            else:
+                raise AssertionError("segundo processo entrou enquanto a trava estava ocupada")
+        except Exception:
+            processo.kill()
+            processo.communicate()
+            raise
+    saida, erro = processo.communicate(timeout=10)
+    assert processo.returncode == 0 and saida.strip() == "adquiriu", erro
+
+    codigo = (
+        "import sys, time; import banco, travas; banco.CAMINHO_CATALOGO=sys.argv[1]; "
+        "\nwith travas.container_exclusivo(sys.argv[2]): "
+        "print('ocupada', flush=True); time.sleep(60)"
+    )
+    processo = subprocess.Popen(
+        [sys.executable, "-c", codigo, banco.CAMINHO_CATALOGO, CONTAINER_SANDBOX],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    try:
+        assert processo.stdout.readline().strip() == "ocupada"
+    finally:
+        processo.kill()
+        processo.communicate(timeout=10)
+    with travas.container_exclusivo(CONTAINER_SANDBOX):
+        pass
+
+    codigo_catalogo = (
+        "import sys; import banco, travas; banco.CAMINHO_CATALOGO=sys.argv[1]; "
+        "print('pronto', flush=True); "
+        "\nwith travas.catalogo_exclusivo(): print('adquiriu', flush=True)"
+    )
+    with travas.catalogo_exclusivo():
+        # O ensaio chama restauração e comparação enquanto já detém a trava.
+        with travas.catalogo_exclusivo():
+            processo = subprocess.Popen(
+                [sys.executable, "-c", codigo_catalogo, banco.CAMINHO_CATALOGO],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            try:
+                assert processo.stdout.readline().strip() == "pronto"
+                try:
+                    processo.wait(timeout=0.3)
+                except subprocess.TimeoutExpired:
+                    pass
+                else:
+                    raise AssertionError("segundo processo entrou no catálogo durante o ensaio")
+            except Exception:
+                processo.kill()
+                processo.communicate()
+                raise
+    saida, erro = processo.communicate(timeout=10)
+    assert processo.returncode == 0 and saida.strip() == "adquiriu", erro
 
 
 def sql(base, comando):
@@ -61,9 +134,13 @@ def main():
                 }),
             ):
                 banco.criar_tabelas()
+                ensaiar_trava_no_host()
                 projeto = Projeto("ensaio_sintetico", "Ensaio sintético", "", CONTAINER_SANDBOX,
                                   "sandbox", ORIGEM, tipos=("banco",))
                 motor.fazer_backup(projeto)
+                assert motor.verificar(projeto.slug) == {
+                    "conferidos": 1, "ausentes": 0, "corrompidos": 0, "nao_verificados": 0,
+                }
                 artefato = banco.listar_artefatos(projeto.slug)[0]
                 resultado = restaurar.restaurar(
                     artefato["id"], container_destino=CONTAINER_SANDBOX,
@@ -88,6 +165,8 @@ def main():
                     "decimal_e_unicode_preservados": True, "tabela_vazia_preservada": True,
                     "dump_de_seguranca_verificado": True, "reexecucao_restaurou_mesmo_estado": True,
                     "catalogo_isolado": True,
+                    "verificacao_do_acervo": True,
+                    "exclusao_entre_processos": True,
                 }, ensure_ascii=False))
     finally:
         # Apenas nomes constantes, conferidos como inexistentes antes da criação.

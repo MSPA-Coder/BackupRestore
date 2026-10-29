@@ -45,6 +45,7 @@ from dataclasses import dataclass, field
 
 import banco
 import motor
+import travas
 from configuracao import ConfiguracaoInvalida, caminho_sob_raiz, raiz_backup
 from projetos import CONTAINER_SANDBOX, por_slug
 
@@ -129,6 +130,12 @@ def _sandbox_de_pe(cache: list[bool]) -> bool:
 
 
 def reconstruir(*, aplicar: bool = False, projeto_slug: str | None = None) -> Relatorio:
+    """Reconstrói o catálogo sem concorrer com a alteração do acervo."""
+    with travas.catalogo_exclusivo():
+        return _reconstruir_exclusivo(aplicar=aplicar, projeto_slug=projeto_slug)
+
+
+def _reconstruir_exclusivo(*, aplicar: bool = False, projeto_slug: str | None = None) -> Relatorio:
     """Varre `projects/<slug>/<tipo>/` e cataloga o que ainda não está no catálogo."""
     relatorio = Relatorio(aplicado=aplicar)
     try:

@@ -71,6 +71,20 @@ seis projetos `_vps` não — a produção acontece sozinha em cada servidor
 busca, verifica e cataloga o que já existe lá, pelo agente restrito
 (`_manutencao/vps/backup-agent.sh`).
 
+Backup, sincronização VPS, verificação, reconstrução do catálogo, fixação,
+restauração e mudanças de configuração usam uma trava compartilhada do acervo,
+inclusive entre processos.
+Assim, a retenção aguarda a leitura ou restauração terminar. O ensaio mantém a
+trava até concluir a comparação, e o mesmo contêiner de origem também é
+protegido durante backup e comparação. Operações diferentes aguardam umas às
+outras, inclusive durante transferência remota; a interface continua mostrando
+os pedidos em fila. As travas ficam em `.backuprestore-locks/` ao lado do
+catálogo e são liberadas pelo sistema operacional se o processo terminar.
+Ao atualizar o programa, encerre processos da versão anterior antes de iniciar
+as operações: uma versão antiga não conhece essa trava compartilhada.
+Se um contêiner de origem estava parado e não for possível pará-lo novamente,
+o backup ou a comparação informa falha; o artefato já verificado é preservado.
+
 Ao fim do ciclo de cada projeto, a sincronização aplica a retenção local dele
 — o mesmo limite de `projetos.py` que o backup dos projetos locais respeita. É
 a regra 3 deste lado: se algum dump da rodada reprovou, a limpeza é suspensa,
@@ -194,6 +208,16 @@ pasta por tipo:
 
 Cada um com `.manifest.json` ao lado (SHA-256, tamanho, origem, e para código o
 `HEAD` e se havia trabalho não commitado).
+
+Nos backups locais, o manifesto completo é publicado antes do artefato
+verificado. Se o processo parar depois da publicação e antes do registro no
+catálogo, `reconstruir-catalogo` pode recuperar o artefato após nova releitura.
+Um manifesto isolado, deixado por interrupção anterior, não entra no catálogo.
+Isso também vale para os arquivos baixados dos VPS. Ao reencontrar uma cópia
+local, a sincronização só pede a remoção remota quando catálogo, tamanho e
+SHA-256 coincidem com o arquivo local e a listagem do servidor. Se a cópia
+não estiver catalogada ou divergir, ela informa falha e mantém a cópia remota;
+verifique o acervo e use a reconstrução do catálogo quando apropriado.
 
 **Os projetos `_vps` só têm `banco/*.dump`**, ou `volume/*.tar.gz` no caso do
 Wealthfolio — sem `codigo/`, porque o código de produção não é um artefato

@@ -71,6 +71,9 @@ class _ComArquivo(unittest.TestCase):
     def setUp(self) -> None:
         self.pasta = tempfile.TemporaryDirectory()
         self.addCleanup(self.pasta.cleanup)
+        controle = patch.object(banco, "CAMINHO_CATALOGO", os.path.join(self.pasta.name, "catalogo.sqlite3"))
+        controle.start()
+        self.addCleanup(controle.stop)
 
     def _gravar(self, conteudo: bytes, nome: str = "copia.tar.gz") -> str:
         caminho = os.path.join(self.pasta.name, nome)

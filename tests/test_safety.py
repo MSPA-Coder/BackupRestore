@@ -66,6 +66,13 @@ class ProjectCatalogTests(unittest.TestCase):
 
 
 class RestoreGuardTests(unittest.TestCase):
+    def setUp(self):
+        pasta = tempfile.TemporaryDirectory()
+        self.addCleanup(pasta.cleanup)
+        controle = patch.object(motor.banco, "CAMINHO_CATALOGO", str(Path(pasta.name) / "catalogo.sqlite3"))
+        controle.start()
+        self.addCleanup(controle.stop)
+
     def test_sandbox_is_accepted_as_restore_destination(self) -> None:
         with patch.object(restaurar.banco, "obter_artefato", return_value=None) as get_artifact:
             with self.assertRaisesRegex(restaurar.RestauracaoRecusada, "não existe no catálogo"):
@@ -341,6 +348,8 @@ class BackupRootGuardTests(unittest.TestCase):
         raiz = os.path.abspath("C:/backups/BackupRestore")
         argumentos = type("Args", (), {"caminho": raiz, "permitida": "C:/backups"})()
         with (
+            tempfile.TemporaryDirectory() as pasta,
+            patch.object(cli.banco, "CAMINHO_CATALOGO", str(Path(pasta) / "catalogo.sqlite3")),
             patch.object(cli.banco, "listar_artefatos", return_value=[object()]),
             patch.object(cli, "raiz_backup", return_value=raiz),
             patch.object(cli, "configurar_raiz_backup", return_value=raiz) as configurar,
@@ -421,6 +430,13 @@ class VpsTargetConfigTests(unittest.TestCase):
 
 
 class EnsaioVpsTests(unittest.TestCase):
+    def setUp(self):
+        pasta = tempfile.TemporaryDirectory()
+        self.addCleanup(pasta.cleanup)
+        controle = patch.object(motor.banco, "CAMINHO_CATALOGO", str(Path(pasta.name) / "catalogo.sqlite3"))
+        controle.start()
+        self.addCleanup(controle.stop)
+
     def test_ensaio_de_projeto_vps_pula_comparacao_com_origem(self) -> None:
         # `comparar_com_origem` recusaria porque o contêiner do projeto VPS
         # colide de nome com o local. `cli.comando_ensaio` não
