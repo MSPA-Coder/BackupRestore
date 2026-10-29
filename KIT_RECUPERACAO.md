@@ -16,7 +16,6 @@ arquivos operacionais nem os segredos provisionados.
 | `ControleRendaVariavel` | `.env`; `.secrets/postgres_password`, `.secrets/postgres_app_password`, `.secrets/secret_key`, `.secrets/database_url`, `.secrets/patrimonio_integration_token`, `.secrets/cb_patrimonio_token`; o par do coletor `.secrets/collector_agent_read_token` e `.secrets/collector_agent_write_token`; os três de qualidade `.secrets/postgres_password_quality`, `.secrets/postgres_app_password_quality` e `.secrets/patrimonio_integration_token_quality`; `.certs/local-root-ca.crt`; se o agente RTD estiver instalado, `.docker-local/remote-collector.env` e `.docker-local/rtd-control-token` |
 | `MegaSena` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/postgres_app_password.txt`, `.secrets/secret_key.txt`; `.certs/local-root-ca.crt` |
 | `ConfortoTermico` | `.env.docker`; `.secrets/postgres_password.txt`, `.secrets/postgres_app_password.txt`, `.secrets/secret_key.txt`; os três tokens internos `.secrets/internal_token.txt`, `.secrets/internal_control_token.txt`, `.secrets/internal_read_token.txt`; `.certs/local-root-ca.crt` |
-| `MpPortal` | `.env`; `.secrets/postgres_password`, `.secrets/django_secret_key`; `.certs/local-root-ca.crt` |
 | `BackupRestore` | `configuracao.local.json` (endereço do VPS, usuário e caminho da chave SSH) e `agendamento.local.json` |
 | `WealthfolioTeste` (se houver instância local) | `.env`; o arquivo da **chave mestra**, apontado por `WF_SECRET_KEY_HOST_PATH` no `.env` e guardado fora do checkout |
 
@@ -61,8 +60,8 @@ removidos o checkout local e o repositório GitHub, além dos 36 artefatos e 36
 manifestos de backup. Os registros NetWorth das tabelas de artefatos, execuções
 e eventos também foram apagados; a verificação SQLite terminou com `ok`.
 
-O arquivo de ambiente do MpPortal chama-se `.env`; todos os outros usam
-`.env.docker`. Procurar o nome dos demais ali nao acha nada.
+O MpPortal saiu desta tabela em 29/10/2026: o portal foi desativado e o projeto
+`mp_portal_vps` deixou o catálogo em 19/10/2026.
 
 As linhas do ControleBancario e do ControleRendaVariavel ganharam em 02/10/2026
 os segredos que o `compose.yaml` de cada um declara e a tabela não tinha (o
@@ -74,7 +73,7 @@ A tabela acima foi conferida contra o disco em 22/09/2026. Naquela conferência
 foram detectadas lacunas nos segredos de qualidade do ControleBancario e do
 Renda Variavel, nos tokens internos extras do ConfortoTermico, no `database_url`
 e no `rtd-control-token` do agente; o `collector_agent_token` virou um par
-`read`/`write`; e o MpPortal usa `.env`, nao `.env.docker`.
+`read`/`write`.
 
 O desvio nao era visivel: os segredos nasceram e mudaram de nome nos projetos,
 e nada liga este documento a eles. **Confira esta tabela contra o disco sempre
