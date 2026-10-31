@@ -79,8 +79,7 @@ Os testes, compilacao e auditoria de dependencias rodam no contêiner de
 qualidade; os comandos de operacao usam o `.venv` local:
 
 ```powershell
-docker compose --profile quality build --pull --no-cache quality
-docker compose --profile quality run --rm --no-deps quality
+docker compose --profile quality run --build --rm --no-deps quality
 docker compose --profile quality run --rm --no-deps audit
 & .\.venv\Scripts\python.exe cli.py verificar
 & .\.venv\Scripts\python.exe cli.py ensaio --projeto <slug>

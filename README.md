@@ -279,8 +279,7 @@ As travas puras de restauração, catálogo e ZIP rodam no contêiner Python 3.1
 O ensaio real continua obrigatório quando a mudança toca backup ou restauração:
 
 ```powershell
-docker compose --profile quality build --pull --no-cache quality
-docker compose --profile quality run --rm --no-deps quality
+docker compose --profile quality run --build --rm --no-deps quality
 docker compose --profile quality run --rm --no-deps audit
 & .\.venv\Scripts\python.exe cli.py verificar
 & .\.venv\Scripts\python.exe cli.py ensaio --projeto <slug>

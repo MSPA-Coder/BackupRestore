@@ -21,7 +21,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.test
-      pull: true
     profiles: [quality]
     pull_policy: never
     command: ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]
@@ -64,8 +63,6 @@ services:
     build:
       context: ./docker/sandbox-postgres
       dockerfile: Dockerfile
-      pull: true
-      no_cache: true
     pull_policy: build
     container_name: backuprestore-sandbox
     # A releitura dos dumps do VPS depende dele: se o Docker reinicia e o
