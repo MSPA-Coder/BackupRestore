@@ -311,7 +311,7 @@ comandos dependem dos artefatos e do sandbox locais. Depois de cada push, a CI
 é só aviso: a verificação que vale é a suíte completa na máquina antes do
 commit, que vai direto ao `main`, sem PR. O Dependabot acompanha pip,
 a imagem PostgreSQL do sandbox e GitHub Actions semanalmente, agrupando
-atualizações minor/patch, por PR com os checks obrigatórios e auto-merge. A
+atualizações minor/patch, por PR com merge manual. A
 série principal do PostgreSQL fica em 17 para não trocar o formato do volume
 sem migração.
 

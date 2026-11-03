@@ -1,82 +1,78 @@
-# Orientacoes do projeto
+# BackupRestore — guia de trabalho
 
-## Papel e fontes de verdade
+<!-- comum: início. Cópia de _manutencao/compartilhados/AGENTS-comum.md; mude lá e rode sincronizar.py --aplicar. -->
+## Regras comuns aos repositórios
 
-BackupRestore roda no host Windows e coordena backup e ensaio de restauracao dos
-quatro projetos web locais, alem de buscar e catalogar os dumps que os dois
-VPS produzem sozinhos (Camada 2 do backup de producao). Ele nao e containerizado
-porque isso exigiria conceder a um container acesso privilegiado ao daemon
-Docker.
+**O que espera o "sim" do mantenedor:** commit e push (quando ele pedir),
+deploy, qualquer ação no VPS, e apagar dados, volumes ou backups
+(`docker compose down -v` inclusive). Na dúvida sobre algo irreversível,
+pergunte; no resto, decida e diga o que decidiu.
 
-- `README.md`: instalacao, operacao e formato dos artefatos.
-- `RESTAURAR.md`: recuperacao manual e limites do backup.
-- `projetos.py`: os dez projetos (quatro locais e seis de origem VPS, campos
-  `ambiente` e `servidor`) e os containers protegidos.
-- `motor.py` e `restaurar.py`: contratos de integridade e restauracao dos
-  projetos locais.
-- `reconstruir.py`: recria o catalogo a partir dos manifestos ao lado dos
-  artefatos, relendo cada um como o backup normal (nada entra como valido sem
-  releitura); simula por padrao.
-- `vps.py`: Camada 2 — busca, verifica e cataloga dumps e copias de volume
-  (`.tar.gz`, o SQLite do Wealthfolio) dos VPS por SSH (um alvo por servidor,
-  gravado por `cli.py configurar-vps`) via um agente restrito no servidor
-  (`listar`/`enviar`/`apagar`/`estado`); nunca dispara `pg_dump` remoto nem
-  toca em container de producao.
+**Ciclo.** Altere, rode a verificação completa deste repositório (seção
+"Validação"), commite direto no `main` e dê `git push`: sem PR, sem push
+forçado, sem rebase do `main` publicado. A CI roda depois, só como aviso, mas
+vermelho no `main` se investiga. O Dependabot chega por PR, com merge manual. O
+deploy é `~/deploy.sh <app>` no VPS1: monta a imagem a partir do `main`,
+confere `/health` e volta sozinho se falhar. O VPS só espelha o `main`; nada se
+edita lá. Imagem-base nova (correção do Debian ou do Python) só quando ele
+pedir: testa na máquina e depois `~/deploy.sh <app> --refresh`. Ao terminar,
+diga o que rodou, o resultado e o que deixou de validar.
 
-Confirme o comportamento no codigo antes de alterar documentacao. Pedido atual
-do mantenedor e requisitos de seguranca e preservacao de dados prevalecem sobre
-decisoes historicas.
+**Dados e segredos.** Mudança destrutiva ou conversão de dados reais começa por
+backup conferido no BackupRestore. Segredos ficam fora do Git (`.secrets/` ou
+configuração do usuário) e não aparecem em código, imagem, log, diff,
+documento nem relatório.
 
-## Ambiente e versoes
+**Dependências.** Alargue o teto e preserve o piso já verificado: elevar o piso
+afirma uma incompatibilidade, e isso exige prova. Vulnerabilidade se corrige
+atualizando; exceção só explícita, com motivo e data. Enquanto o Dependabot não
+aceitar Python 3.15, ele não propõe atualização de `uv` e o grafo do GitHub fica
+parado no lock de 13/10/2026: confira alerta pela versão do `uv.lock`, e
+atualize à mão (`uv lock --upgrade-package <pacote>`) quando o `pip-audit` ou o
+Trivy apontarem.
 
-A aplicacao usa Python no host porque coordena o Docker sem montar o socket em
-um contêiner. O runtime padrao e Python 3.15 no `.venv`; `iniciar.bat` seleciona,
-nesta ordem, `BACKUPRESTORE_PYTHON`, `.venv\Scripts\python.exe` e o wrapper
-estavel `%LOCALAPPDATA%\Python\bin\python.cmd`. Nao use diretorios internos
-versionados nem o alias da Microsoft Store.
+**Testes.** `docs/TESTES.md` diz o que testar e como. Diante de vermelho,
+decida de quem é o defeito; nunca escreva código para um teste passar. Não
+rode duas verificações do mesmo repositório ao mesmo tempo: a segunda recria o
+banco de teste e derruba a primeira.
 
-Python 3.15 e a versao padrao para o runtime local e para a imagem de teste. As
-imagens de banco mantem sua serie principal para preservar compatibilidade com
-os volumes; Dependabot atualiza os patches semanalmente e a CI valida a imagem.
+**Cópias.** Este bloco, `docs/TESTES.md` e os arquivos listados em
+`_manutencao/compartilhados/sincronizar.py` são cópias: mude a canônica lá e
+rode `python compartilhados/sincronizar.py --aplicar` no `_manutencao`.
 
-Nunca instale dependencias silenciosamente no host. Se o runtime configurado
-estiver ausente ou invalido, diagnostique e proponha uma instalacao reproduzivel.
+**Este arquivo.** Guarde aqui só o que o código não diz: limites, decisões com
+o motivo, armadilhas e comandos. História fica no `git log`; decisão com
+alternativas vira ADR; detalhe de implementação fica no código. Para
+acrescentar uma regra, retire ou funda outra: `sincronizar.py` reprova este
+arquivo acima de 900 palavras fora deste bloco.
+<!-- comum: fim -->
 
-## Invariantes de seguranca e recuperacao
+## O sistema
 
-Qualquer mudanca em `motor.py`, `restaurar.py`, `banco.py`, `projetos.py` ou
-`vps.py` preserva estes contratos:
+Roda no host Windows e coordena backup e ensaio de restauração dos projetos
+web locais, além de buscar e catalogar os dumps que os dois VPS produzem
+sozinhos (Camada 2). Não é containerizado porque isso exigiria dar a um
+contêiner acesso privilegiado ao daemon Docker.
 
-1. Artefatos nascem em diretorio temporario e so recebem o nome final por troca
-   atomica depois de verificados.
-2. Dumps, ZIPs e copias de volume sao relidos; codigo de saida zero, sozinho,
-   nao basta.
-3. Retencao ocorre apenas depois de existir substituto valido e nunca remove o
-   ultimo artefato valido de um tipo.
-4. O estado original do container e restaurado em `finally`, inclusive em falha.
-5. Restauracao comeca por dump de seguranca verificado do destino.
-6. O nome do banco precisa ser confirmado e somente `backuprestore-sandbox`
-   pode ser destino da restauração automática, sem flag de bypass.
-7. SHA-256, tamanho e origem permanecem verificaveis pelo catalogo.
+- `README.md`: instalação, operação e formato dos artefatos;
+- `RESTAURAR.md`: recuperação manual e limites do backup;
+- `projetos.py`: os projetos (locais e de origem VPS, campos `ambiente` e
+  `servidor`) e os contêineres protegidos;
+- `motor.py` e `restaurar.py`: contratos de integridade e restauração locais;
+- `reconstruir.py`: recria o catálogo a partir dos manifestos, relendo cada
+  artefato; simula por padrão;
+- `vps.py`: busca, verifica e cataloga dumps e cópias de volume dos VPS por
+  SSH, através de um agente restrito no servidor
+  (`listar`/`enviar`/`apagar`/`estado`). Nunca dispara `pg_dump` remoto nem
+  toca em contêiner de produção.
 
-A raiz de backup e seu limite permitido sao definidos somente pelo operador no
-host (`cli.py configurar-raiz` ou a variavel de processo
-`BACKUPRESTORE_RAIZ_PERMITIDA`). A interface em `127.0.0.1` e somente leitura
-para essa configuracao. Caminhos relativos do catalogo devem ser resolvidos e
-confirmados sob a raiz antes de leitura, remocao ou restauracao.
+O runtime é Python 3.15 no `.venv`; `iniciar.bat` escolhe, nesta ordem,
+`BACKUPRESTORE_PYTHON`, `.venv\Scripts\python.exe` e o wrapper
+`%LOCALAPPDATA%\Python\bin\python.cmd` (nunca o alias da Microsoft Store). Se o
+runtime faltar, diagnostique e proponha instalação reproduzível; não instale
+nada em silêncio no host.
 
-O sandbox `backuprestore-sandbox` e o unico destino autorizado para restauracao
-automatica. Nunca aponte ensaios aos volumes operacionais. `down -v` somente e
-permitido para o Compose descartavel `compose.yaml`, depois de confirmar o
-nome do projeto Compose.
-
-Segredos, certificados e arquivos ignorados nao fazem parte do ZIP de codigo.
-Nao os adicione sem uma estrategia de cifra, acesso e recuperacao aprovada.
-
-## Validacao proporcional
-
-Os testes, compilacao e auditoria de dependencias rodam no contêiner de
-qualidade; os comandos de operacao usam o `.venv` local:
+## Validação
 
 ```powershell
 docker compose --profile quality run --build --rm --no-deps quality
@@ -85,39 +81,39 @@ docker compose --profile quality run --rm --no-deps audit
 & .\.venv\Scripts\python.exe cli.py ensaio --projeto <slug>
 ```
 
-- Documentacao ou interface sem efeito operacional: confira links, comandos e o
-  fluxo afetado.
-- Catalogo e regras puras: execute os testes automatizados no contêiner quality.
-- Backup, retencao, restauracao ou selecao de alvo: execute testes, `verificar`
-  e ao menos um `ensaio` real no sandbox.
-- Mudanca no sandbox: valide `docker compose -f compose.yaml config
-  --quiet`, suba o servico, aguarde o health check e descarte somente o volume
-  do sandbox ao concluir.
+A suíte do contêiner `quality` roda antes de todo commit de código.
 
-Em qualquer mudança de código, rode a suíte completa do contêiner quality na
-máquina antes do commit: é essa verificação que vale. O commit vai direto ao
-`main`, com `git push`, sem PR e sem esperar nada; a regra do `main` continua
-impedindo apagá-lo ou reescrever o histórico (nada de push forçado nem de
-rebase do `main`). A CI roda depois de cada push só como aviso e não bloqueia
-nada; se falhar, investigue. O Dependabot continua por PR, com os checks
-obrigatórios; o merge é manual (o workflow de auto-merge foi removido).
+- Catálogo e regras puras: a suíte basta.
+- Backup, retenção, restauração ou seleção de alvo: a suíte, `verificar` e ao
+  menos um `ensaio` real no sandbox. Mock não substitui o ensaio; testes
+  pequenos protegem seleção de alvo, bloqueios, retenção e falhas antes dele.
+- Sandbox: `docker compose -f compose.yaml config --quiet`, subir, esperar o
+  health check e descartar só o volume do sandbox.
+- Só documentação: confira links, comandos e o fluxo afetado, e rode
+  `python ../_manutencao/compartilhados/sincronizar.py`.
 
-O que merece teste, em que camada e em que forma está em `docs/TESTES.md`,
-comum aos repositórios; leia antes de escrever ou remover um teste. Diante de
-vermelho, decida de quem é o defeito antes de mexer: teste que mede texto
-literal reprova mudança legítima, e nesse caso quem se corrige é a asserção.
-Nunca escreva código para o teste passar.
+## Contratos que toda mudança preserva
 
-Nao substitua o ensaio de restauracao apenas por mocks. Testes pequenos devem
-proteger selecao de alvo, bloqueios, retencao e falhas antes do ensaio real.
+Em `motor.py`, `restaurar.py`, `banco.py`, `projetos.py` e `vps.py`:
 
-## Pratica de mudanca
+1. Artefato nasce em diretório temporário e só ganha o nome final por troca
+   atômica, depois de verificado.
+2. Dump, ZIP e cópia de volume são relidos; código de saída zero não basta.
+3. Retenção só depois de existir substituto válido, e nunca remove o último
+   artefato válido de um tipo.
+4. O estado original do contêiner volta em `finally`, inclusive em falha.
+5. Restauração começa por dump de segurança verificado do destino.
+6. O nome do banco é confirmado, e só `backuprestore-sandbox` pode ser destino
+   de restauração automática, sem flag de bypass.
+7. SHA-256, tamanho e origem continuam verificáveis pelo catálogo.
 
-- Preserve alteracoes locais nao relacionadas e nunca registre segredos.
-- Mantenha mudancas pequenas, reversiveis e com um unico objetivo.
-- Mudancas de formato do catalogo ou artefato precisam de compatibilidade,
-  migracao ou procedimento de rollback explicito.
-- Atualize README/RESTAURAR quando operacao ou recuperacao mudarem.
-- Não adicione diários de implementação ou planos concluídos às instruções vivas;
-  o histórico de mudanças já permanece no Git.
-- Ao concluir, informe comandos executados, resultados e validacoes omitidas.
+A raiz de backup e o seu limite são definidos só pelo operador no host
+(`cli.py configurar-raiz` ou `BACKUPRESTORE_RAIZ_PERMITIDA`); a interface em
+`127.0.0.1` só os lê. Caminho relativo do catálogo se resolve e se confirma sob
+a raiz antes de ler, remover ou restaurar. `down -v` só no Compose descartável
+`compose.yaml`, depois de confirmar o nome do projeto Compose.
+
+Segredos, certificados e arquivos ignorados não entram no ZIP de código sem
+uma estratégia aprovada de cifra, acesso e recuperação. Mudança de formato do
+catálogo ou do artefato precisa de compatibilidade, migração ou rollback
+explícito, e README/RESTAURAR acompanham quando operação ou recuperação mudam.
