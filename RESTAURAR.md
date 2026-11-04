@@ -115,10 +115,11 @@ compatível restaurado em banco limpo e siga o procedimento de migrations da
 versão escolhida; não tente “reverter” o banco apenas trocando o código.
 
 A partir de 03/11/2026, um app pode ter a história de migrações consolidada
-numa base (`migrations/versions/*_base.py`), com o identificador da última
-revisão que estava em produção. A docstring da base diz qual é essa revisão e o
-commit da cadeia antiga. Um dump com outra revisão gravada passa primeiro pelas
-migrações desse commit e só depois pelo `main`.
+numa base (`migrations/versions/*_base.py`; no bancário, a `0001_initial` de
+cada app, explicada em `core/migrations/0001_initial.py`), com o identificador
+da última revisão que estava em produção. A docstring da base diz qual é essa
+revisão e o commit da cadeia antiga. Um dump com outra revisão gravada passa
+primeiro pelas migrações desse commit e só depois pelo `main`.
 
 **2 a 4.** Iguais aos passos acima, com o dump `_vps` no lugar do dump local.
 Os segredos e certificados do lado do VPS **não são os mesmos arquivos do lado
