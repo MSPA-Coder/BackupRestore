@@ -85,6 +85,8 @@ projetos-descobertos.local.json
 .backuprestore-locks/
 ultima-execucao.txt
 ensaio-mensal-ultimo.txt
+vigia-ultimo.txt
+vigia-teste.txt
 
 # Ensaios e arquivos intermediários locais, fora do código e do catálogo.
 /CodexTemp/

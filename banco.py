@@ -301,6 +301,15 @@ def artefatos_validos(projeto: str, tipo: str, finalidade: str = "regular") -> l
         ).fetchall()
 
 
+def artefatos_do_projeto(projeto: str) -> list[sqlite3.Row]:
+    """Nome e SHA-256 de todo artefato do projeto, em qualquer situação: o que
+    o vigia precisa para saber se um dump do servidor já passou por aqui."""
+    with conectar() as conexao:
+        return conexao.execute(
+            "SELECT caminho_relativo, sha256 FROM artefatos WHERE projeto = ?", (projeto,)
+        ).fetchall()
+
+
 def listar_artefatos(projeto: str | None = None, limite: int = 200) -> list[sqlite3.Row]:
     with conectar() as conexao:
         if projeto:

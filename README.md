@@ -367,6 +367,33 @@ locais). Nos dois casos o catálogo e os artefatos anteriores continuam
 Depois da primeira execução, confira o resultado com
 `.venv\Scripts\python.exe cli.py listar`.
 
+### Vigia do backup do VPS
+
+Os dois canais acima só relatam uma tarefa que rodou. A tarefa desabilitada
+não roda e não relata nada (cinco vezes entre 02/09 e 20/09/2026), e o alerta
+de silêncio do painel só aparece para quem o abre. O `vigia.py` cobre esse
+caso: lista, pelo agente do VPS, os dumps que continuam no servidor e avisa
+quando algum tem mais de 30 horas e não está no catálogo local. Como a
+sincronização apaga do servidor o que já baixou, um dump antigo lá é prova de
+que nada está chegando aqui. Servidor que não responde também vira aviso.
+
+O aviso é uma notificação do Windows que fica na tela até ser fechada; se o
+Windows a recusar, o relatório abre numa janela do PowerShell, como o resumo
+do backup. Com ou sem aviso, o veredito fica em `vigia-ultimo.txt`. O vigia só
+lê: não busca, não apaga e não escreve no catálogo.
+
+```powershell
+.\scripts\registrar-vigia.ps1                               # registra a tarefa "BackupRestore Vigia"
+& .\.venv\Scripts\python.exe vigia.py                       # roda agora e mostra o veredito
+& .\.venv\Scripts\python.exe vigia.py --testar-notificacao  # confere o canal, sem consultar o VPS
+```
+
+A tarefa roda às 12:00 e uma hora depois de cada logon, na sessão do usuário
+(a notificação precisa dela), e abre um console por alguns segundos enquanto
+consulta o VPS. Ela é uma segunda tarefa agendada e pode ser desligada pelo
+mesmo agente que desliga a `BackupRestore`; a auditoria do Agendador registra
+quem desligar qualquer uma das duas.
+
 ### Ensaio mensal
 
 O script `scripts\\ensaio-mensal.ps1` encadeia `verificar` e `ensaio --todos`,

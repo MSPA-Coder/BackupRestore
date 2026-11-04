@@ -270,14 +270,17 @@ origem do dump.
   dumps.
 - **Quanto se perde (RPO) é a idade do artefato mais recente no catálogo
   LOCAL, não a do último `backup-db.sh`.** O servidor produz o dump às 03:00
-  (São Paulo) e a tarefa `BackupRestoreVPS` o busca às 03:30, mas se o PC
+  (São Paulo) e a tarefa `BackupRestore` o busca às 03:30, mas se o PC
   estiver desligado ou a busca falhar, as cópias mais novas ficam só no VPS —
   exatamente o que se perderia junto com ele. No ensaio de 03/10/2026 o
   catálogo local estava cerca de 11 horas atrás (e cerca de 4 horas atrás do
   que o próprio VPS já tinha). Para saber o RPO de hoje, compare
   `python cli.py listar` com o `estado` do agente do VPS.
-- **Monitoramento.** Nada aqui avisa em tempo real se o VPS parar de produzir
-  backup; `python cli.py sincronizar-vps --todos` (ou a tarefa agendada
-  `BackupRestoreVPS`) é como se descobre, não uma notificação ativa.
+- **Monitoramento.** Desde 04/11/2026 o vigia (`vigia.py`, tarefa "BackupRestore
+  Vigia") avisa por notificação do Windows quando um dump do VPS passa de 30
+  horas sem chegar ao catálogo local, ou quando o servidor não responde: é o
+  RPO acima crescendo. Ele não avisa se o próprio VPS parar de produzir
+  backup; para isso, `python cli.py sincronizar-vps --todos` (ou a tarefa
+  agendada `BackupRestore`) mostra a data do último dump buscado.
 
 Veja [KIT_RECUPERACAO.md](KIT_RECUPERACAO.md) para o inventário operacional.
