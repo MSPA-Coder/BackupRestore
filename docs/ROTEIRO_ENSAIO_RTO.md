@@ -35,11 +35,11 @@ Este PC (Windows 11 Home, 15,6 GB de RAM, 739 GB livres, Docker Desktop com WSL2
 | Volume do Wealthfolio com a chave mestra | Tempo humano de atenção, decisões e interrupções |
 | Conferência de dados e do contrato v4 | |
 
-Para a coluna da direita, procure no que já existe os tempos de quando o VPS2 foi criado (13/09/2026) e o VPS1 (17-18/08/2026) e cite a fonte; se não houver registro, pergunte ao mantenedor uma faixa (mínimo e máximo) e marque como **estimativa dele**, nunca como medida.
+Para a coluna da direita, procure no que já existe os tempos de quando o VPS1 foi criado (17-18/08/2026) e os da migração do VPS2 (criado em 13/09/2026, desativado em 05/11/2026) e cite a fonte; se não houver registro, pergunte ao mantenedor uma faixa (mínimo e máximo) e marque como **estimativa dele**, nunca como medida.
 
 ## Regras de segurança
 
-1. **Produção só em leitura**: `listar`, `estado`, `~/deploy.sh --status`, consultas SQL de leitura pelo MCP `financas`. Nenhum restore, reinício, deploy ou escrita no VPS1 nem no VPS2.
+1. **Produção só em leitura**: `listar`, `estado`, `~/deploy.sh --status`, consultas SQL de leitura pelo MCP `financas`. Nenhum restore, reinício, deploy ou escrita no VPS1.
 2. Restaurações vão **só para dentro de `rto-vps1`** (e, para o que já existe, o `backuprestore-sandbox`). A trava do BackupRestore (`CONTAINERS_PROTEGIDOS`) não se contorna.
 3. **Segredos não entram na conversa nem no relatório**: mostre nome e tamanho, nunca valor. Copie o kit para dentro da distro por arquivo, sem imprimir. Não mova a pasta de chaves (`C:\Dev\OracleKeysMariano`, o BackupRestore aponta para o caminho absoluto).
 4. **A reconstrução do Wealthfolio** (imagem com patches, 35 a 60 minutos de build) é CPU local e não custa dinheiro, mas é longa: **peça OK antes de iniciá-la**, uma vez, e diga a estimativa.

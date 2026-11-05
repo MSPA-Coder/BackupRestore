@@ -174,8 +174,8 @@ o valor atual na tela do add-on.
 
 ## Sites e configuração de um servidor
 
-Os projetos `site_<pasta>_vps` / `_vps2` e `configuracao_servidor_vps` /
-`_vps2` guardam em `volume\` um `.tar.gz` comum, sem banco e sem chave mestra:
+Os projetos `site_<pasta>_vps` e `configuracao_servidor_vps` (e, nas cópias
+antigas do servidor desativado em 05/11/2026, os de sufixo `_vps2`) guardam em `volume\` um `.tar.gz` comum, sem banco e sem chave mestra:
 
 1. Confira o SHA-256 com o `.manifest.json` ao lado (ou `cli.py verificar`).
 2. Extraia numa pasta vazia: `tar -xzf <arquivo>.tar.gz -C <pasta>`.

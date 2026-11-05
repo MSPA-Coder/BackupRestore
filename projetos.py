@@ -64,9 +64,9 @@ RETENCAO_VPS = 14
 
 # Nome do alvo SSH de onde um projeto `ambiente="vps"` é buscado. Cada nome
 # corresponde a um alvo gravado por `cli.py configurar-vps --servidor <nome>`.
-# Os projetos fixos abaixo vêm do servidor principal (o portal saiu do VPS2 em
-# 10/2026 e `mp_portal_vps` saiu do catálogo em 19/10/2026). Os sites e a
-# configuração de cada servidor, inclusive o segundo, são DESCOBERTOS: ver
+# Os projetos fixos abaixo vêm do servidor principal (`mp_portal_vps` saiu do
+# catálogo em 19/10/2026; o VPS2 foi desativado em 05/11/2026). Os sites e a
+# configuração de cada servidor, se houver mais de um, são DESCOBERTOS: ver
 # `PROJETOS_DESCOBERTOS` mais abaixo.
 
 
@@ -83,7 +83,7 @@ class Projeto:
     tipos: tuple[str, ...] = field(default=("banco", "codigo"))
     servidor: str = SERVIDOR_PRINCIPAL
     # Pasta do projeto em `~/backups` no servidor, quando não é o slug sem o
-    # sufixo `_vps` (os descobertos de outro servidor terminam em `_vps2`).
+    # sufixo `_vps` (os descobertos de outro servidor terminam no nome dele, como `_vps2`).
     slug_remoto: str = ""
 
     @property
