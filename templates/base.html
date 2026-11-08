@@ -24,8 +24,13 @@
           <a class="nav-link {% if secao == 'configuracoes' %}active{% endif %}" href="{{ url_for('configuracoes') }}"><span class="nav-icon">CO</span>Configurações</a>
         </nav>
         <div class="sidebar-foot">
-          <span class="status-dot"></span> Motor local ativo<br />
-          <small>Backups e restaurações reais</small>
+          {% if docker_ok %}
+            <span class="status-dot"></span> Docker respondendo<br />
+            <small>Backups e restaurações reais</small>
+          {% else %}
+            <strong>Docker indisponível</strong><br />
+            <small>Backup e restauração não vão funcionar até o Docker voltar</small>
+          {% endif %}
         </div>
       </aside>
 

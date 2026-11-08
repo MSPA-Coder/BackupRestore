@@ -402,7 +402,8 @@ def _sincronizar_exclusivo(projeto: Projeto, execucao_id: int | None = None) -> 
                 resultado.reprovados += 1
                 banco.registrar_evento(
                     "sincronizacao.reprovado",
-                    f"{dump.arquivo}: servidor não tem SHA-256 para conferir — não buscado",
+                    f"{dump.arquivo}: servidor não tem SHA-256 para conferir — não buscado. "
+                    "Dump feito à mão não tem o arquivo .sha256: use ~/backup-db.sh --forcar.",
                     projeto=projeto.slug, execucao_id=execucao_id, severidade="erro",
                 )
                 continue

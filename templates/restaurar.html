@@ -66,6 +66,11 @@
           <button class="primary" type="submit">Restaurar no sandbox</button>
         </div>
       </form>
+    {% elif not docker_ok %}
+      <div class="aviso-erro">
+        O Docker não está respondendo, então não dá para restaurar agora.
+        Abra o Docker Desktop e recarregue esta página.
+      </div>
     {% else %}
       <div class="aviso-erro">
         O sandbox não está criado. Suba com:

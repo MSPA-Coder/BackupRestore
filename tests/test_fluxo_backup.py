@@ -48,6 +48,7 @@ class FluxoBackupTests(unittest.TestCase):
         self.falha_releitura = False
         self.falha_restore = False
         self.destino_existe = True
+        self.projeto_compose = restaurar.PROJETO_COMPOSE_SANDBOX
         controle = patch("subprocess.run", side_effect=self.docker)
         controle.start()
         self.addCleanup(controle.stop)
@@ -55,8 +56,12 @@ class FluxoBackupTests(unittest.TestCase):
     def docker(self, comando, **opcoes):
         self.comandos.append(comando)
         codigo, saida, erro = 0, b"", b""
-        if comando[1] == "inspect":
+        if comando[1] == "inspect" and "com.docker.compose.project" in comando[3]:
+            saida = self.projeto_compose.encode()
+        elif comando[1] == "inspect":
             saida = b"true" if self.rodando else b"false"
+        elif comando[1] == "version":
+            saida = b"29.0.0"
         elif comando[1] in ("start", "stop"):
             self.rodando = comando[1] == "start"
         elif "pg_isready" in comando:
@@ -363,6 +368,13 @@ class FluxoBackupTests(unittest.TestCase):
             artefato_id, container_destino=CONTAINER_SANDBOX,
             banco_destino='qa "destino"', usuario_destino="sandbox", confirmacao='qa "destino"',
         )
+
+    def test_restore_recusa_homonimo_do_sandbox_sem_nenhuma_escrita(self):
+        artefato_id = self.preparar_restore()
+        self.projeto_compose = "controle-bancario"
+        with self.assertRaisesRegex(restaurar.RestauracaoRecusada, "não foi certificado"):
+            self.restaurar(artefato_id)
+        self.assertFalse(any("exec" in c for c in self.comandos))
 
     def test_restore_preserva_destino_antes_de_drop_e_registra_seguranca(self):
         resultado = self.restaurar(self.preparar_restore())

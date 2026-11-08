@@ -209,6 +209,9 @@ def montar_resumo(
     linhas = [
         "BackupRestore — resumo da última execução agendada",
         "=" * 64,
+        "Retrato desta rodada: uma execução manual posterior não altera este arquivo.",
+        "O estado atual está no painel.",
+        "",
         f"Início ....: {_instante(inicio)}",
         f"Fim .......: {_instante(fim)}",
         f"RESULTADO .: {veredito}",

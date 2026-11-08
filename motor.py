@@ -118,11 +118,35 @@ def _erro(processo: subprocess.CompletedProcess) -> str:
 
 
 def estado_container(nome: str) -> tuple[bool, bool]:
-    """(existe, está rodando)."""
-    processo = _rodar(["docker", "inspect", "-f", "{{.State.Running}}", nome], tempo_limite=30)
+    """(existe, está rodando). Sem Docker, nada existe: a tela explica, não quebra."""
+    try:
+        processo = _rodar(["docker", "inspect", "-f", "{{.State.Running}}", nome], tempo_limite=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return (False, False)
     if processo.returncode != 0:
         return (False, False)
     return (True, processo.stdout.decode().strip() == "true")
+
+
+def docker_disponivel() -> bool:
+    """Se o daemon responde agora. A interface mostra isto em vez de afirmar."""
+    try:
+        return _rodar(["docker", "version", "--format", "{{.Server.Version}}"],
+                      tempo_limite=5).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def projeto_compose_do_container(nome: str) -> str | None:
+    """Projeto Compose que criou o contêiner; None se ele não existir ou não tiver rótulo."""
+    formato = '{{index .Config.Labels "com.docker.compose.project"}}'
+    try:
+        processo = _rodar(["docker", "inspect", "-f", formato, nome], tempo_limite=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if processo.returncode != 0:
+        return None
+    return processo.stdout.decode().strip() or None
 
 
 def _esperar_postgres(projeto: Projeto, tentativas: int = 40) -> None:

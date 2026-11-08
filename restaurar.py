@@ -141,6 +141,9 @@ def _dump_de_seguranca(
     return final
 
 
+PROJETO_COMPOSE_SANDBOX = "backuprestore-sandbox"
+
+
 def restaurar(
     artefato_id: int,
     *,
@@ -193,6 +196,16 @@ def _restaurar_exclusivo(artefato_id: int, container_destino: str, banco_destino
         banco.marcar_situacao_artefato(artefato_id, "corrompido")
         raise RestauracaoRecusada(
             "SHA-256 não confere com o catálogo — artefato marcado como corrompido"
+        )
+
+    # Trava 3 — identidade. O nome de um contêiner não prova o que ele é: outro
+    # contêiner pode ter sido criado com o mesmo nome. O Compose do sandbox é o
+    # único que tem este rótulo, e ele é conferido antes de qualquer escrita.
+    projeto_compose = motor.projeto_compose_do_container(container_destino)
+    if projeto_compose != PROJETO_COMPOSE_SANDBOX:
+        raise RestauracaoRecusada(
+            f"{container_destino!r} não foi certificado como sandbox: esperado o projeto "
+            f"Compose {PROJETO_COMPOSE_SANDBOX!r}, encontrado {projeto_compose!r}."
         )
 
     execucao_id = banco.abrir_execucao(artefato["projeto"], "restauracao")

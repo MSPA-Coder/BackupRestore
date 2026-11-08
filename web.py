@@ -93,6 +93,12 @@ def _hospedeiro(valor: str) -> str:
     return urlsplit(f"//{sem_esquema}").hostname or ""
 
 
+@app.context_processor
+def _estado_do_docker() -> dict[str, bool]:
+    """Toda tela diz se o Docker responde: o rodapé não afirma o que não conferiu."""
+    return {"docker_ok": motor.docker_disponivel()}
+
+
 @app.before_request
 def _recusar_origem_estranha():
     if _hospedeiro(request.host) not in HOSTS_LOOPBACK:
