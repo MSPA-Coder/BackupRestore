@@ -181,16 +181,62 @@ class SshTests(unittest.TestCase):
 
 
 class VerificarNoSandboxTests(unittest.TestCase):
+    """Duas causas diferentes não podem virar a mesma recusa.
+
+    `motor.estado_container` devolve (False, False) para contêiner ausente e
+    para daemon que não responde. Em 09/11/2026 uma rodada de recuperação (a
+    tarefa das 03:30 correndo no retorno da máquina, junto com a subida do
+    Docker Desktop) reprovou um dump com "sandbox não existe" — e o mesmo
+    sandbox releu outro dump com sucesso 18 s depois. A recusa mandava recriar
+    um contêiner que estava no lugar, então o que estes testes protegem é
+    *qual* causa é relatada, não a redação dela.
+    """
+
     def test_recusa_se_sandbox_nao_existe(self) -> None:
-        with patch.object(motor, "estado_container", return_value=(False, False)):
-            with self.assertRaises(vps.FalhaDeSincronizacao):
+        with (
+            patch.object(motor, "docker_disponivel", return_value=True),
+            patch.object(motor, "estado_container", return_value=(False, False)),
+        ):
+            with self.assertRaises(vps.FalhaDeSincronizacao) as contexto:
                 vps.verificar_dump_no_sandbox("/tmp/algum.dump")
+        self.assertIn("compose", str(contexto.exception), "não diz como criar o sandbox")
+
+    def test_daemon_que_nao_responde_nao_e_relatado_como_sandbox_ausente(self) -> None:
+        with (
+            patch.object(motor, "docker_disponivel", return_value=False),
+            patch.object(motor, "esperar_docker", return_value=False),
+            patch.object(motor, "estado_container") as estado,
+        ):
+            with self.assertRaises(vps.FalhaDeSincronizacao) as contexto:
+                vps.verificar_dump_no_sandbox("/tmp/algum.dump")
+        mensagem = str(contexto.exception)
+        self.assertIn("Docker", mensagem)
+        self.assertNotIn("compose", mensagem, "mandou recriar um sandbox que pode existir")
+        estado.assert_not_called()
+
+    def test_espera_o_daemon_e_segue_quando_ele_sobe(self) -> None:
+        """O caso de 09/11: o daemon ainda não respondia, mas respondeu."""
+        with tempfile.TemporaryDirectory() as diretorio:
+            caminho = Path(diretorio, "x.dump")
+            caminho.write_bytes(b"conteudo")
+            with (
+                patch.object(motor, "docker_disponivel", return_value=False),
+                patch.object(motor, "esperar_docker", return_value=True) as esperar,
+                patch.object(motor, "estado_container", return_value=(True, True)),
+                patch.object(motor, "_rodar") as rodar,
+            ):
+                rodar.return_value = subprocess.CompletedProcess(
+                    args=[], returncode=0, stdout=b"", stderr=b""
+                )
+                vps.verificar_dump_no_sandbox(str(caminho))
+            esperar.assert_called_once()
 
     def test_usa_pg_restore_list_no_container_sandbox(self) -> None:
         with tempfile.TemporaryDirectory() as diretorio:
             caminho = Path(diretorio, "x.dump")
             caminho.write_bytes(b"conteudo")
             with (
+                patch.object(motor, "docker_disponivel", return_value=True),
                 patch.object(motor, "estado_container", return_value=(True, True)),
                 patch.object(motor, "_rodar") as rodar,
             ):
@@ -200,6 +246,36 @@ class VerificarNoSandboxTests(unittest.TestCase):
                 vps.verificar_dump_no_sandbox(str(caminho))
             comando = rodar.call_args.args[0]
         self.assertEqual(comando, ["docker", "exec", "-i", CONTAINER_SANDBOX, "pg_restore", "--list"])
+
+
+class EsperarDockerTests(unittest.TestCase):
+    def test_devolve_verdadeiro_assim_que_o_daemon_responde(self) -> None:
+        respostas = [False, False, True]
+        with (
+            patch.object(motor, "docker_disponivel", side_effect=respostas),
+            patch.object(motor.time, "sleep") as dormir,
+        ):
+            self.assertTrue(motor.esperar_docker(segundos=90))
+        self.assertEqual(dormir.call_count, 2, "dormiu depois de o daemon já responder")
+
+    def test_desiste_dentro_da_janela_em_vez_de_esperar_para_sempre(self) -> None:
+        """O teto é tempo de parede: sondagem lenta não estica a espera."""
+        agora = [0.0]
+
+        def _monotonic() -> float:
+            return agora[0]
+
+        def _nunca() -> bool:
+            agora[0] += 7.0  # sondagem lenta, como um `docker version` no limite
+            return False
+
+        with (
+            patch.object(motor, "docker_disponivel", side_effect=_nunca),
+            patch.object(motor.time, "monotonic", side_effect=_monotonic),
+            patch.object(motor.time, "sleep"),
+        ):
+            self.assertFalse(motor.esperar_docker(segundos=30))
+        self.assertLessEqual(agora[0], 37.0, "passou do teto de tempo pedido")
 
 
 class BuscarECatalogarTests(unittest.TestCase):

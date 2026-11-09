@@ -324,6 +324,19 @@ def _apagar_remoto(alvo: dict[str, str], dump: DumpRemoto) -> str:
 
 
 def verificar_dump_no_sandbox(caminho: str) -> None:
+    # `motor.estado_container` devolve (False, False) tanto para contêiner
+    # ausente quanto para daemon que não responde — está no docstring dele, e
+    # é correto para a interface. Aqui não: sem separar os dois casos, um
+    # Docker ainda subindo é relatado como "sandbox não existe" e manda o
+    # operador recriar um contêiner que está no lugar. Foi o que aconteceu em
+    # 09/11/2026, numa rodada de recuperação: o mesmo sandbox dito inexistente
+    # releu um dump com sucesso 18 segundos depois.
+    if not motor.docker_disponivel() and not motor.esperar_docker():
+        raise FalhaDeSincronizacao(
+            f"o Docker não respondeu em {motor.SEGUNDOS_ESPERANDO_DOCKER}s — o daemon "
+            "pode estar subindo. O sandbox não foi consultado; o dump continua no "
+            "servidor para a próxima rodada."
+        )
     existe, rodando = motor.estado_container(CONTAINER_SANDBOX)
     if not existe:
         raise FalhaDeSincronizacao(

@@ -137,6 +137,36 @@ def docker_disponivel() -> bool:
         return False
 
 
+SEGUNDOS_ESPERANDO_DOCKER = 90
+
+
+def esperar_docker(segundos: int = SEGUNDOS_ESPERANDO_DOCKER) -> bool:
+    """Se o daemon respondeu, esperando até `segundos` por ele.
+
+    Existe pela rodada de recuperação: quando a corrida das 03:30 é perdida
+    porque o host estava dormindo ou desligado, o `StartWhenAvailable` da
+    tarefa a executa no instante em que a máquina volta — e aí o daemon ainda
+    não atende, seja porque o Docker Desktop está subindo, seja porque o
+    backend WSL ainda não voltou do sono. Sem esperar, o agendamento chega
+    primeiro e `estado_container` responde como se nada existisse.
+
+    O contêiner não precisa ter caído para isso acontecer: em 09/11/2026 o
+    sandbox estava no ar havia horas, e o `docker inspect` só estourou os 30 s
+    de limite.
+
+    Conta tempo de parede, e não tentativas como `_esperar_postgres`, porque
+    aqui cada sondagem pode consumir o próprio limite de 5 s: 40 tentativas
+    valeriam de 40 s a mais de 3 min, e o teto precisa ser previsível.
+    """
+    limite = time.monotonic() + segundos
+    while True:
+        if docker_disponivel():
+            return True
+        if time.monotonic() >= limite:
+            return False
+        time.sleep(2)
+
+
 def projeto_compose_do_container(nome: str) -> str | None:
     """Projeto Compose que criou o contêiner; None se ele não existir ou não tiver rótulo."""
     formato = '{{index .Config.Labels "com.docker.compose.project"}}'
