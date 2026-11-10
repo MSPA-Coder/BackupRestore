@@ -113,7 +113,7 @@ cópias de arquivos entram sozinhas; banco novo é avisado e cadastrado à mão 
 & .\.venv\Scripts\python.exe cli.py configurar-vps <host-de-outro-servidor> --servidor <nome> --chave 'C:\caminho\da\chave-dedicada'
 ```
 
-A mesma chave dedicada pode servir aos dois servidores: em cada um ela entra no
+A mesma chave dedicada pode servir a mais de um servidor: em cada um ela entra no
 `authorized_keys` presa por `command=` ao agente.
 
 O agente do servidor só sabe quatro verbos (`listar`, `enviar`, `apagar`,
