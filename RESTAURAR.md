@@ -216,7 +216,7 @@ python cli.py verificar
 
 O sandbox (`compose.yaml`) é um PostgreSQL descartável na porta 5439. O
 comando abaixo restaura o dump mais recente lá dentro e compara as contagens de
-linha com o projeto original:
+linha com o projeto original e descarta o banco do sandbox ao terminar:
 
 ```bash
 python cli.py ensaio --projeto conforto_termico

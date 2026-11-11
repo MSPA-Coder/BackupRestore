@@ -65,8 +65,8 @@ scripts\\ensaio-mensal.ps1                 # verifica e ensaia todos os bancos, 
 & .\.venv\Scripts\python.exe web.py # interface em http://127.0.0.1:5401
 ```
 
-Os quatro projetos locais produzem o próprio backup (contêiner Docker). Os
-seis projetos `_vps` não — a produção acontece sozinha em cada servidor
+Os projetos locais produzem o próprio backup (contêiner Docker). Os
+projetos `_vps` não — a produção acontece sozinha em cada servidor
 (`_manutencao/vps/backup-db.sh`, systemd timer) e o `sincronizar-vps` só
 busca, verifica e cataloga o que já existe lá, pelo agente restrito
 (`_manutencao/vps/backup-agent.sh`).
@@ -259,7 +259,9 @@ dele.** É o `cli.py ensaio`.
 ## Sandbox
 
 `compose.yaml` sobe um PostgreSQL descartável na porta 5439. É o único
-destino de restauração que a ferramenta aceita.
+destino de restauração que a ferramenta aceita. O `cli.py ensaio` descarta o
+banco `ensaio_<slug>` ao fim, depois do relatório; a restauração pela interface
+web o mantém, para inspeção, até a próxima restauração do mesmo projeto.
 
 O processo do sandbox roda como `postgres`, sem capabilities e com filesystem
 raiz somente leitura; apenas o volume descartável de dados e os diretórios
@@ -311,7 +313,7 @@ de severidade HIGH ou CRITICAL. Não roda `verificar` ou `ensaio`, pois esses
 comandos dependem dos artefatos e do sandbox locais. Depois de cada push, a CI
 é só aviso: a verificação que vale é a suíte completa na máquina antes do
 commit, que vai direto ao `main`, sem PR. O Dependabot acompanha pip,
-a imagem PostgreSQL do sandbox e GitHub Actions semanalmente, agrupando
+a imagem PostgreSQL do sandbox, o Compose e GitHub Actions semanalmente, agrupando
 atualizações minor/patch, por PR com merge manual. A
 série principal do PostgreSQL fica em 17 para não trocar o formato do volume
 sem migração.
@@ -436,7 +438,7 @@ quando o Agendador de Tarefas chama o `ssh.exe` real do Windows.
 ## Arquivos
 
 ```
-projetos.py     os 10 projetos (4 locais + 6 de origem VPS, em 2 servidores) e o sandbox autorizado
+projetos.py     os projetos (locais e de origem VPS, em um servidor) e o sandbox autorizado
 banco.py        catálogo SQLite (3 tabelas, sem ORM; uma migração, a do tipo volume)
 motor.py        produção e verificação dos artefatos locais — o núcleo
 restaurar.py    travas, dump de segurança e pg_restore

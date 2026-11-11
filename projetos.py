@@ -197,7 +197,7 @@ PROJETOS_FIXOS: tuple[Projeto, ...] = (
     # `networth` e `networth_vps` saíram do catálogo em 29/09/2026: o NetWorth (prova
     # de conceito) foi aposentado, local e no VPS
     # (o Wealthfolio opera no domínio dele). Os dumps já catalogados ficam no
-    # disco, sem retenção nem verificação novas. O mesmo vale para `mp_portal_vps`,
+    # disco, sem retenção nova (o `verificar` continua relendo todas as linhas do catálogo). O mesmo vale para `mp_portal_vps`,
     # retirado em 19/10/2026.
     # O Wealthfolio não tem Postgres: o patrimônio fica num SQLite dentro do
     # volume `wealthfolio-teste-data`, e o que vem do servidor é a cópia desse

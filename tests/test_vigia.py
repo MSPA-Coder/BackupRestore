@@ -14,7 +14,7 @@ import vps
 from projetos import AMBIENTE_VPS, Projeto
 
 AGORA = datetime(2026, 11, 4, 15, 0, tzinfo=UTC)
-ALVO = {"host": "100.94.82.91", "usuario": "ubuntu", "chave": "C:/chave"}
+ALVO = {"host": "100.64.0.10", "usuario": "ubuntu", "chave": "C:/chave"}
 
 
 def _projeto(slug: str, *, ambiente: str = AMBIENTE_VPS, servidor: str = "vps1") -> Projeto:
