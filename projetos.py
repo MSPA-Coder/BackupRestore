@@ -181,7 +181,7 @@ PROJETOS_FIXOS: tuple[Projeto, ...] = (
         banco="controle_bancario",
         ambiente=AMBIENTE_VPS,
         retencao=RETENCAO_VPS,
-        tipos=("banco",),
+        tipos=("banco", "volume"),
     ),
     Projeto(
         slug="controle_renda_variavel_vps",

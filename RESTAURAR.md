@@ -252,12 +252,16 @@ origem do dump.
   fora quando forem ignorados pelo projeto.
 - **Os volumes Docker em si.** Restaura-se o *conteúdo* dos bancos via dump, não
   seus volumes. Dumps são portáveis entre versões e máquinas, mas outros
-  volumes precisam de uma estratégia própria. A exceção é o do Wealthfolio,
-  que não tem banco à parte: ele é copiado inteiro (`volume\`, acima), e é a
-  aplicação que declara isso, com o rótulo `mspa.backup.volume` no Compose.
-- **Comprovantes do Controle Bancário.** Os arquivos ficam em `media_volume`;
-  o dump contém referências do banco, não o conteúdo enviado. Preserve-os pela
-  cópia independente descrita no kit.
+  volumes precisam de uma estratégia própria. As exceções são os que a
+  aplicação declara com o rótulo `mspa.backup.volume` no Compose: o do
+  Wealthfolio, que não tem banco à parte e é copiado inteiro (`volume\`,
+  acima), e o dos comprovantes do Controle Bancário.
+- **Comprovantes do Controle Bancário.** Os arquivos ficam em `media_volume`
+  (`/workspace/media` no contêiner `web`); o dump contém referências do banco,
+  não o conteúdo enviado. Desde 11/11/2026 o volume é copiado junto com o
+  dump e chega a `projects\controle_bancario_vps\volume\`. Para recuperar,
+  restaure o dump e extraia o `.tar.gz` no volume com o serviço parado, como
+  no passo 3 do Wealthfolio. Não há ensaio automático dessa extração.
 - **Segredos do VPS.** Nunca entram em artefato nenhum — cópia manual para o
   cofre, sempre (ver a seção "VPS (produção)" do kit).
 - **Código dos projetos `_vps`.** A fonte é o `main` do GitHub, imposto pelo
