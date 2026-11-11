@@ -262,9 +262,12 @@ def backups():
 
 @app.get("/restaurar")
 def restaurar_catalogo():
+    # Dump de projeto que saiu de `PROJETOS` continua no catálogo, mas não tem
+    # como ser restaurado por aqui (o ensaio precisa do projeto): não se lista.
+    conhecidos = {p.slug for p in PROJETOS}
     artefatos = [
         a for a in banco.listar_artefatos(limite=500)
-        if a["tipo"] == "banco" and a["situacao"] == "valido"
+        if a["tipo"] == "banco" and a["situacao"] == "valido" and a["projeto"] in conhecidos
     ]
     return render_template("restaurar_catalogo.html", artefatos=artefatos)
 
@@ -367,6 +370,14 @@ def api_execucao(execucao_id: int):
 # --------------------------------------------------------------------------
 
 
+def _projeto_restauravel(artefato):
+    """O projeto do artefato, ou 404 se ele já saiu de `PROJETOS`."""
+    try:
+        return por_slug(artefato["projeto"])
+    except KeyError:
+        abort(404)
+
+
 @app.get("/restaurar/<int:artefato_id>")
 def tela_restaurar(artefato_id: int):
     artefato = banco.obter_artefato(artefato_id)
@@ -374,7 +385,7 @@ def tela_restaurar(artefato_id: int):
         abort(404)
     if artefato["tipo"] != "banco":
         abort(400, "só dumps de banco são restauráveis por aqui")
-    alvo = por_slug(artefato["projeto"])
+    alvo = _projeto_restauravel(artefato)
     existe, _ = motor.estado_container(CONTAINER_SANDBOX)
     return render_template(
         "restaurar.html",
@@ -392,7 +403,7 @@ def executar_restauracao(artefato_id: int):
     artefato = banco.obter_artefato(artefato_id)
     if artefato is None:
         abort(404)
-    alvo = por_slug(artefato["projeto"])
+    alvo = _projeto_restauravel(artefato)
     destino = f"ensaio_{alvo.slug}"
     try:
         # O destino é fixo e descartável. A interface não oferece escolha de

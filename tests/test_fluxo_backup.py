@@ -471,3 +471,21 @@ class FluxoBackupTests(unittest.TestCase):
         resposta = web.app.test_client().post(f"/restaurar/{artefato_id}", data={"confirmacao": "errada"})
         self.assertEqual(resposta.status_code, 302)
         self.assertEqual(self.comandos, [])
+
+    def test_http_dump_de_projeto_retirado_da_lista_da_404_e_nao_aparece(self):
+        retirado = banco.registrar_artefato(
+            projeto="projeto_retirado_vps", tipo="banco",
+            caminho_relativo="projects/projeto_retirado_vps/banco/x.dump",
+            bytes_=10, sha256="0" * 64, duracao_ms=1, execucao_id=None,
+        )
+        conhecido = self.preparar_restore()
+        cliente = web.app.test_client()
+        self.assertEqual(cliente.get(f"/restaurar/{retirado}").status_code, 404)
+        self.assertEqual(
+            cliente.post(f"/restaurar/{retirado}", data={"confirmacao": "x"}).status_code, 404
+        )
+        lista = cliente.get("/restaurar")
+        self.assertEqual(lista.status_code, 200)
+        self.assertNotIn(f"/restaurar/{retirado}".encode(), lista.data)
+        self.assertIn(f"/restaurar/{conhecido}".encode(), lista.data)
+        self.assertFalse(any(c[1] == "exec" for c in self.comandos))
