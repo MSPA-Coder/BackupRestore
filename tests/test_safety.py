@@ -452,6 +452,7 @@ class EnsaioVpsTests(unittest.TestCase):
             patch.object(
                 cli.restauracao, "resumo_banco", return_value={"tabela": 5}
             ) as resumo_mock,
+            patch.object(cli.restauracao, "descartar_banco") as descarte_mock,
             patch.object(cli.restauracao, "comparar_com_origem") as comparar_mock,
         ):
             codigo = cli.comando_ensaio(argumentos)
@@ -460,6 +461,7 @@ class EnsaioVpsTests(unittest.TestCase):
         restaurar_mock.assert_called_once()
         resumo_mock.assert_called_once()
         comparar_mock.assert_not_called()
+        descarte_mock.assert_called_once()
 
     def test_origem_local_indisponivel_nao_derruba_o_ensaio(self) -> None:
         # A restauração no sandbox já aconteceu quando a origem se revela
@@ -477,6 +479,7 @@ class EnsaioVpsTests(unittest.TestCase):
             patch.object(cli.motor, "estado_container", return_value=(True, True)),
             patch.object(cli.restauracao, "restaurar", return_value={}),
             patch.object(cli.restauracao, "resumo_banco", return_value={"tabela": 5}),
+            patch.object(cli.restauracao, "descartar_banco"),
             patch.object(
                 cli.restauracao, "comparar_com_origem",
                 side_effect=restaurar.OrigemIndisponivel("contêiner de origem não existe"),
@@ -503,6 +506,7 @@ class EnsaioVpsTests(unittest.TestCase):
                 cli.restauracao, "restaurar", side_effect=[RuntimeError("pg_restore travou"), {}]
             ),
             patch.object(cli.restauracao, "resumo_banco", return_value={"tabela": 5}),
+            patch.object(cli.restauracao, "descartar_banco"),
             patch("sys.stdout", new_callable=io.StringIO) as saida,
             patch("sys.stderr", new_callable=io.StringIO),
         ):

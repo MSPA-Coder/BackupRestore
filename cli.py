@@ -333,7 +333,27 @@ def _ensaiar_exclusivo(projeto: Projeto) -> int:
     except restauracao.RestauracaoRecusada as erro:
         print(f"RECUSADO: {erro}", file=sys.stderr)
         return 2
+    except Exception:
+        # Restauração interrompida deixa banco parcial com dado de produção.
+        _descartar_ensaio(destino)
+        raise
 
+    try:
+        return _concluir_ensaio(projeto, destino)
+    finally:
+        _descartar_ensaio(destino)
+
+
+def _descartar_ensaio(destino: str) -> None:
+    """Descarta o banco do ensaio; falha aqui avisa, não muda o veredito."""
+    try:
+        restauracao.descartar_banco(CONTAINER_SANDBOX, USUARIO_SANDBOX, destino)
+        print(f"   banco {destino} descartado do sandbox.")
+    except Exception as erro:
+        print(f"AVISO: não descartei {destino} do sandbox: {erro}", file=sys.stderr)
+
+
+def _concluir_ensaio(projeto: Projeto, destino: str) -> int:
     if projeto.ambiente != "local":
         # A origem é outra máquina — `comparar_com_origem` recusaria (ver a
         # trava em restaurar.py), de propósito: o agente da Camada 2 só sabe

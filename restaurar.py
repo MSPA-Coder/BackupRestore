@@ -86,6 +86,28 @@ def resumo_banco(container: str, usuario: str, nome: str) -> dict[str, int]:
     return resumo
 
 
+def descartar_banco(container: str, usuario: str, nome: str) -> None:
+    """Remove do sandbox o banco restaurado por um ensaio.
+
+    O ensaio já respondeu o que tinha de responder; deixar a cópia de produção
+    no volume do sandbox só a guardaria em claro num segundo lugar. Mesmas
+    travas da restauração: só o sandbox, certificado pelo rótulo do Compose, e
+    só nomes `ensaio_*`, para que nunca apague outro banco.
+    """
+    if container != CONTAINER_SANDBOX:
+        raise RestauracaoRecusada(f"descarte recusado: somente {CONTAINER_SANDBOX!r}")
+    if not nome.startswith("ensaio_"):
+        raise RestauracaoRecusada(f"descarte recusado: {nome!r} não é um banco de ensaio")
+    projeto_compose = motor.projeto_compose_do_container(container)
+    if projeto_compose != PROJETO_COMPOSE_SANDBOX:
+        raise RestauracaoRecusada(
+            f"{container!r} não foi certificado como sandbox (projeto Compose {projeto_compose!r})."
+        )
+    _psql(container, usuario, "postgres",
+          f"DROP DATABASE IF EXISTS {_identificador_sql(nome)} WITH (FORCE)")
+    banco.registrar_evento("restauracao.descarte", f"{container}/{nome} descartado após o ensaio")
+
+
 def _dump_de_seguranca(
     container: str, usuario: str, base: str, slug_projeto: str, execucao_id: int | None
 ) -> str | None:

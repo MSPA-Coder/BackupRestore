@@ -489,3 +489,44 @@ class FluxoBackupTests(unittest.TestCase):
         self.assertNotIn(f"/restaurar/{retirado}".encode(), lista.data)
         self.assertIn(f"/restaurar/{conhecido}".encode(), lista.data)
         self.assertFalse(any(c[1] == "exec" for c in self.comandos))
+
+    def _drops(self):
+        return [c[-1] for c in self.comandos if "psql" in c and "DROP DATABASE" in c[-1]]
+
+    def test_ensaio_descarta_o_banco_restaurado_ao_fim(self):
+        motor.fazer_backup(LOCAL, tipos=("banco",))
+        self.comandos.clear()
+        destino = f"ensaio_{LOCAL.slug}"
+        with (
+            patch("sys.stdout", new=io.StringIO()), patch("sys.stderr", new=io.StringIO()),
+            patch.object(restaurar, "comparar_com_origem",
+                         side_effect=restaurar.OrigemIndisponivel("origem parada")),
+        ):
+            self.assertEqual(cli.main(["ensaio", "--projeto", LOCAL.slug]), 0)
+        indice = [i for i, c in enumerate(self.comandos) if "psql" in c and "DROP DATABASE" in c[-1]]
+        aplicar = next(i for i, c in enumerate(self.comandos) if "--exit-on-error" in c)
+        resumo = max(i for i, c in enumerate(self.comandos) if "pg_stat_user_tables" in c[-1])
+        # Um DROP para recriar antes do restore e outro, depois do resumo, para descartar.
+        self.assertEqual(len(indice), 2)
+        self.assertGreater(indice[-1], resumo)
+        self.assertGreater(resumo, aplicar)
+        self.assertIn(f'"{destino}"', self.comandos[indice[-1]][-1])
+
+    def test_ensaio_com_restauracao_interrompida_tambem_descarta(self):
+        motor.fazer_backup(LOCAL, tipos=("banco",))
+        self.comandos.clear()
+        self.falha_restore = True
+        with patch("sys.stdout", new=io.StringIO()), patch("sys.stderr", new=io.StringIO()):
+            with self.assertRaises(RuntimeError):
+                cli.main(["ensaio", "--projeto", LOCAL.slug])
+        self.assertEqual(len(self._drops()), 2)
+
+    def test_descarte_so_aceita_sandbox_certificado_e_banco_de_ensaio(self):
+        with self.assertRaises(restaurar.RestauracaoRecusada):
+            restaurar.descartar_banco("producao", "sandbox", "ensaio_x")
+        with self.assertRaises(restaurar.RestauracaoRecusada):
+            restaurar.descartar_banco(CONTAINER_SANDBOX, "sandbox", "controle_bancario")
+        self.projeto_compose = "controle-bancario"
+        with self.assertRaises(restaurar.RestauracaoRecusada):
+            restaurar.descartar_banco(CONTAINER_SANDBOX, "sandbox", "ensaio_x")
+        self.assertEqual(self._drops(), [])
