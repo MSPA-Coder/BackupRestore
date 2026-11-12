@@ -18,7 +18,8 @@
   function no(tag, classe, texto, estilo) {
     const e = document.createElement(tag);
     if (classe) e.className = classe;
-    if (estilo) e.setAttribute('style', estilo);
+    // A CSP recusa o atributo style; a propriedade pelo CSSOM é permitida.
+    if (estilo) for (const [chave, valor] of Object.entries(estilo)) e.style.setProperty(chave, valor);
     if (texto !== undefined) e.textContent = texto;
     return e;
   }
@@ -32,26 +33,26 @@
       const lista = no('a', 'secondary', 'Ver lista');
       lista.setAttribute('href', location.pathname);
       const contexto = no('div', 'context-bar', undefined,
-                          'grid-template-columns:1fr auto');
+                          { 'grid-template-columns': '1fr auto' });
       contexto.append(rotulos, lista);
       alvo.replaceChildren(contexto);
       return;
     }
     if (dados.situacao === 'falha') {
-      const aviso = no('div', 'aviso-erro', undefined, 'margin-bottom:20px');
+      const aviso = no('div', 'aviso-erro', undefined, { 'margin-bottom': '20px' });
       aviso.append(no('strong', null, 'O backup falhou.'),
                    document.createTextNode(' ' + (dados.erro || 'sem detalhe')));
       alvo.replaceChildren(aviso);
       return;
     }
     const barra = no('div', 'barra-progresso');
-    barra.append(no('i', null, undefined, 'width:' + progresso + '%'));
+    barra.append(no('i', null, undefined, { width: progresso + '%' }));
     const rotulos = no('div');
     rotulos.append(no('span', 'context-label', 'EM ANDAMENTO'),
                    no('strong', null, dados.fase || 'Preparando'),
                    barra);
     const contexto = no('div', 'context-bar rodando', undefined,
-                        'grid-template-columns:1fr auto');
+                        { 'grid-template-columns': '1fr auto' });
     contexto.append(rotulos, no('span', 'cell-value', progresso + '%'));
     alvo.replaceChildren(contexto);
   }

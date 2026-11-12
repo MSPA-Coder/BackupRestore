@@ -34,7 +34,7 @@
 <section class="panel">
   <div class="panel-title"><div><h2>Conteúdo restaurado</h2><p>Contagem por tabela, lida do destino.</p></div></div>
   {% for tabela, linhas in resultado.tabelas.items() %}
-    <div class="history-row" style="grid-template-columns:1fr 140px">
+    <div class="history-row linha-estreita">
       <span class="cell-value">{{ tabela }}</span>
       <span class="cell-value">{{ '{:,}'.format(linhas).replace(',', '.') }} linhas</span>
     </div>

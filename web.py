@@ -113,6 +113,26 @@ def _recusar_origem_estranha():
     return None
 
 
+# Tudo que a página carrega vem deste mesmo servidor: um script, uma folha de
+# estilo, nenhum trecho embutido no HTML. A política recusa o resto, de modo
+# que um texto do catálogo que vire marcação não executa nem busca nada fora.
+CABECALHOS_DE_SEGURANCA = {
+    "Content-Security-Policy": (
+        "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; "
+        "connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    ),
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+@app.after_request
+def _cabecalhos_de_seguranca(resposta):
+    for nome, valor in CABECALHOS_DE_SEGURANCA.items():
+        resposta.headers.setdefault(nome, valor)
+    return resposta
+
+
 # --------------------------------------------------------------------------
 # Apresentação
 # --------------------------------------------------------------------------

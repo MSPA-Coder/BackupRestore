@@ -199,3 +199,7 @@ dialog h2 { margin:0 35px 7px 0; font-size:20px; }
 .health-list { display:grid; gap:10px; margin:14px 0 0; padding:0; list-style:none; color:#537064; font-size:12px; }
 .health-list li::before { content:'✓'; color:#2e9a62; font-weight:800; margin-right:8px; }
 @media(max-width:860px){ .project-cards,.retention-grid,.settings-grid,.restore-steps,.compact-metrics { grid-template-columns:1fr; } .artifact-header { display:none; } .artifact-row { grid-template-columns:1fr; gap:6px; } .catalog-filters { align-items:stretch; } .catalog-filters label,.catalog-filters select { width:100%; } }
+.mb-26 { margin-bottom:26px; }
+.mb-20 { margin-bottom:20px; }
+.mt-16 { margin-top:16px; }
+.history-row.linha-estreita { grid-template-columns:1fr 140px; }

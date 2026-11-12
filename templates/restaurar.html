@@ -15,7 +15,7 @@
 </div>
 
 {% if erro %}
-  <div class="aviso-erro" style="margin-bottom:20px"><strong>Recusado.</strong> {{ erro }}</div>
+  <div class="aviso-erro mb-20"><strong>Recusado.</strong> {{ erro }}</div>
 {% endif %}
 
 <div class="details-grid">
@@ -61,7 +61,7 @@
           <input class="confirmar-campo" name="confirmacao" autocomplete="off" required
                  placeholder="{{ banco_destino }}" />
         </label>
-        <div class="dialog-actions" style="margin-top:16px">
+        <div class="dialog-actions mt-16">
           <a class="secondary" href="{{ url_for('projeto', slug=projeto.slug) }}">Cancelar</a>
           <button class="primary" type="submit">Restaurar no sandbox</button>
         </div>
