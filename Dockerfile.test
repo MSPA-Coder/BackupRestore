@@ -66,4 +66,6 @@ PY
 COPY . /workspace
 RUN python -m compileall -q /workspace
 
+USER 65532:65532
+
 CMD ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]
