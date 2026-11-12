@@ -665,7 +665,7 @@ def _verificar_exclusivo(projeto_slug: str | None = None) -> dict[str, int]:
     """
     contagem = {"conferidos": 0, "ausentes": 0, "corrompidos": 0, "nao_verificados": 0}
     linhas = [
-        linha for linha in banco.listar_artefatos(projeto_slug, limite=10000)
+        linha for linha in banco.listar_artefatos(projeto_slug, limite=None)
         if linha["situacao"] in ("valido", "corrompido", "ausente")
     ]
 

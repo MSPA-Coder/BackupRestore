@@ -90,6 +90,23 @@ class VerificarTests(_CenarioDeVerificacao):
         self.assertEqual(contagem["conferidos"], 0)
         self.assertEqual(gravadas, [], "a situação tem de ficar como estava")
 
+    def test_verificar_le_o_acervo_inteiro_sem_teto(self) -> None:
+        """Um teto de linhas deixaria artefatos sem verificação, calado (SQL-L4)."""
+        with patch.object(banco, "listar_artefatos", return_value=[]) as lista:
+            motor.verificar("mega_sena_vps")
+        self.assertIsNone(lista.call_args.kwargs["limite"])
+
+    def test_listar_artefatos_sem_limite_devolve_todos(self) -> None:
+        banco.criar_tabelas()
+        for numero in range(3):
+            banco.registrar_artefato(
+                projeto="mega_sena_vps", tipo="banco", caminho_relativo=f"a/{numero}",
+                bytes_=1, sha256=SHA_QUALQUER, duracao_ms=1, execucao_id=None,
+            )
+        self.assertEqual(len(banco.listar_artefatos(limite=2)), 2)
+        self.assertEqual(len(banco.listar_artefatos(limite=None)), 3)
+        self.assertEqual(len(banco.listar_artefatos("mega_sena_vps", limite=None)), 3)
+
     def test_dump_integro_e_relido_no_sandbox_e_nao_no_container_do_projeto(self) -> None:
         comandos: list[list[str]] = []
 

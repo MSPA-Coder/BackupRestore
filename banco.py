@@ -310,7 +310,9 @@ def artefatos_do_projeto(projeto: str) -> list[sqlite3.Row]:
         ).fetchall()
 
 
-def listar_artefatos(projeto: str | None = None, limite: int = 200) -> list[sqlite3.Row]:
+def listar_artefatos(projeto: str | None = None, limite: int | None = 200) -> list[sqlite3.Row]:
+    """`limite=None` devolve o acervo inteiro (no SQLite, `LIMIT -1`)."""
+    limite = -1 if limite is None else limite
     with conectar() as conexao:
         if projeto:
             return conexao.execute(
