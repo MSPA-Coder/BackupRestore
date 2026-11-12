@@ -179,6 +179,13 @@ arquivos e o catálogo de forma consciente. Referências do catálogo que tentem
 sair da raiz são recusadas e marcadas como corrompidas, nunca abertas ou
 removidas.
 
+A raiz padrão fica dentro do Dropbox (`...\Dropbox\Programacao\Backups\BackupRestore`)
+de propósito: é a cópia fora da máquina. Os dumps de produção ficam ali sem
+cifra do lado do cliente, e o risco foi aceito pelo mantenedor em 11/2026: a
+proteção é a conta do Dropbox (BitLocker e cifra dos dumps ficaram de fora).
+O `.dropignore` deste repositório vale para a pasta do código; não alcança a
+raiz de backup, que é a pasta `Backups` ao lado.
+
 ### Rollback do tipo `volume` (02/10/2026)
 
 A primeira partida desta versão migra o catálogo: o `CHECK` da coluna `tipo`
@@ -267,6 +274,11 @@ O processo do sandbox roda como `postgres`, sem capabilities e com filesystem
 raiz somente leitura; apenas o volume descartável de dados e os diretórios
 transitórios em `tmpfs` permanecem graváveis. Isso não altera o procedimento de
 descarte nem os artefatos de backup.
+
+`docker compose build` refaz a imagem, mas o contêiner em execução só a troca
+quando é recriado. Depois de reconstruir, rode
+`docker compose -f compose.yaml up -d --force-recreate sandbox`: o volume de
+dados fica, e o `sandbox` volta a receber as correções de pacote.
 
 O sandbox também fica limitado a 2 vCPU, para que um dump defeituoso não
 monopolize o host.
