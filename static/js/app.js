@@ -13,27 +13,47 @@
 
   const FASES_FINAIS = ['sucesso', 'falha'];
 
+  // Todo texto que veio do servidor entra por textContent: nada de HTML montado
+  // a partir de dados (o campo `erro` pode carregar saída de agente remoto).
+  function no(tag, classe, texto, estilo) {
+    const e = document.createElement(tag);
+    if (classe) e.className = classe;
+    if (estilo) e.setAttribute('style', estilo);
+    if (texto !== undefined) e.textContent = texto;
+    return e;
+  }
+
   function desenhar(dados) {
+    const progresso = Number(dados.progresso) || 0;
     if (dados.situacao === 'sucesso') {
-      alvo.innerHTML =
-        '<div class="context-bar" style="grid-template-columns:1fr auto">' +
-        '<div><span class="context-label">BACKUP CONCLUÍDO</span>' +
-        '<strong>Artefatos gravados e verificados</strong></div>' +
-        '<a class="secondary" href="' + location.pathname + '">Ver lista</a></div>';
+      const rotulos = no('div');
+      rotulos.append(no('span', 'context-label', 'BACKUP CONCLUÍDO'),
+                     no('strong', null, 'Artefatos gravados e verificados'));
+      const lista = no('a', 'secondary', 'Ver lista');
+      lista.setAttribute('href', location.pathname);
+      const contexto = no('div', 'context-bar', undefined,
+                          'grid-template-columns:1fr auto');
+      contexto.append(rotulos, lista);
+      alvo.replaceChildren(contexto);
       return;
     }
     if (dados.situacao === 'falha') {
-      alvo.innerHTML =
-        '<div class="aviso-erro" style="margin-bottom:20px"><strong>O backup falhou.</strong> ' +
-        (dados.erro || 'sem detalhe') + '</div>';
+      const aviso = no('div', 'aviso-erro', undefined, 'margin-bottom:20px');
+      aviso.append(no('strong', null, 'O backup falhou.'),
+                   document.createTextNode(' ' + (dados.erro || 'sem detalhe')));
+      alvo.replaceChildren(aviso);
       return;
     }
-    alvo.innerHTML =
-      '<div class="context-bar rodando" style="grid-template-columns:1fr auto">' +
-      '<div><span class="context-label">EM ANDAMENTO</span>' +
-      '<strong>' + (dados.fase || 'Preparando') + '</strong>' +
-      '<div class="barra-progresso"><i style="width:' + (dados.progresso || 0) + '%"></i></div>' +
-      '</div><span class="cell-value">' + (dados.progresso || 0) + '%</span></div>';
+    const barra = no('div', 'barra-progresso');
+    barra.append(no('i', null, undefined, 'width:' + progresso + '%'));
+    const rotulos = no('div');
+    rotulos.append(no('span', 'context-label', 'EM ANDAMENTO'),
+                   no('strong', null, dados.fase || 'Preparando'),
+                   barra);
+    const contexto = no('div', 'context-bar rodando', undefined,
+                        'grid-template-columns:1fr auto');
+    contexto.append(rotulos, no('span', 'cell-value', progresso + '%'));
+    alvo.replaceChildren(contexto);
   }
 
   function consultar() {
