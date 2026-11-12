@@ -71,12 +71,16 @@ def banco_existe(container: str, usuario: str, nome: str) -> bool:
 
 def resumo_banco(container: str, usuario: str, nome: str) -> dict[str, int]:
     """Contagem de linhas por tabela — é assim que se prova que a restauração
-    trouxe os dados, e não só criou o esquema."""
+    trouxe os dados, e não só criou o esquema.
+
+    Contagem exata (`count(*)` por tabela, numa só consulta): `n_live_tup` é
+    estimativa do coletor de estatísticas e diverge em tabela grande ou com
+    muita escrita recente, o que faria um dump íntegro "não conferir"."""
     sql = (
-        "SELECT relname || '=' || n_live_tup FROM pg_stat_user_tables "
-        "ORDER BY relname"
+        "SELECT relname || '=' || ((xpath('/row/c/text()', query_to_xml("
+        "format('select count(*) as c from %I.%I', schemaname, relname), "
+        "false, true, '')))[1])::text FROM pg_stat_user_tables ORDER BY relname"
     )
-    _psql(container, usuario, nome, "ANALYZE")
     saida = _psql(container, usuario, nome, sql)
     resumo: dict[str, int] = {}
     for linha in saida.splitlines():

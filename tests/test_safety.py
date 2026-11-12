@@ -209,6 +209,17 @@ class RestoreGuardTests(unittest.TestCase):
         marcar.assert_called_once_with(7, "corrompido")
 
 
+class ResumoBancoTests(unittest.TestCase):
+    def test_conta_linhas_de_verdade_e_nao_estima(self) -> None:
+        """`n_live_tup` é estimativa: a prova de que os dados voltaram é a contagem."""
+        with patch.object(restaurar, "_psql", return_value="eventos=1200\nusuarios=3") as psql:
+            resumo = restaurar.resumo_banco("c", "u", "b")
+        self.assertEqual(resumo, {"eventos": 1200, "usuarios": 3})
+        consultas = [chamada.args[3] for chamada in psql.call_args_list]
+        self.assertTrue(all("count(*)" in c for c in consultas))
+        self.assertFalse(any("n_live_tup" in c or "ANALYZE" in c for c in consultas))
+
+
 class BackupRootGuardTests(unittest.TestCase):
     def test_default_root_is_derived_from_repository_location(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
